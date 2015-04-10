@@ -6,6 +6,9 @@
 .text
 .globl kern_entry
 kern_entry:
+    # prevent edison watch reset
+    movl $0xff009000, %eax
+    movl $0x10f8, (%eax)
     # reload temperate gdt (second time) to remap all physical memory
     # virtual_addr 0~4G=linear_addr&physical_addr -KERNBASE~4G-KERNBASE 
     lgdt REALLOC(__gdtdesc)
