@@ -13,6 +13,8 @@ kern_entry:
     movw %ax, %ds
     movw %ax, %es
     movw %ax, %ss
+    movl $0x18, %eax
+    movw %ax, %gs
 
     ljmp $KERNEL_CS, $relocated
 
@@ -43,7 +45,8 @@ __gdt:
     SEG_NULL
     SEG_ASM(STA_X | STA_R, - KERNBASE, 0xFFFFFFFF)      # code segment
     SEG_ASM(STA_W, - KERNBASE, 0xFFFFFFFF)              # data segment
+    SEG_ASM(STA_W, 0xff010180, 0xFFFFFFFF)              # data segment
 __gdtdesc:
-    .word 0x17                                          # sizeof(__gdt) - 1
+    .word 0x1F                                          # sizeof(__gdt) - 1
     .long REALLOC(__gdt)
 

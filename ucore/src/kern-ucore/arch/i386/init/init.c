@@ -25,7 +25,7 @@ int kern_init(void)
 	extern char edata[], end[];
 	memset(edata, 0, end - edata);
 
-	cons_init();		// init the console
+	//cons_init();		// init the console
 
 	const char *message = "(THU.CST) os is loading ...";
 	kprintf("%s\n\n", message);
@@ -38,9 +38,11 @@ int kern_init(void)
 	debug_init();		// init debug registers
 	pmm_init();		// init physical memory management
 	pmm_init_ap();
+	asm volatile ("movb $0x37, %gs:0");
 
 	pic_init();		// init interrupt controller
 	idt_init();		// init interrupt descriptor table
+	asm volatile ("movb $0x38, %gs:0");
 
 	vmm_init();		// init virtual memory management
 	sched_init();		// init scheduler

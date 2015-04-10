@@ -198,6 +198,15 @@ static void serial_putc(int c)
 	}
 }
 
+static void mmio_putc(int c)
+{
+    extern char mmio asm("%gs:0");
+    mmio = c;
+    // maybe we need wait for uart?
+    volatile int i = 0;
+    for (i = 0; i < 100; i++);
+}
+
 /* *
  * Here we manage the console input buffer, where we stash characters
  * received from the keyboard or serial port whenever the corresponding
@@ -423,6 +432,13 @@ void cons_init(void)
 /* cons_putc - print a single character @c to console devices */
 void cons_putc(int c)
 {
+    if (c == '\n') {
+        mmio_putc('\r');
+        mmio_putc('\n');
+    } else {
+        mmio_putc(c);
+    }
+    /*
 	bool intr_flag;
 	local_intr_save(intr_flag);
 	{
@@ -431,6 +447,7 @@ void cons_putc(int c)
 		serial_putc(c);
 	}
 	local_intr_restore(intr_flag);
+    */
 }
 
 /* *
