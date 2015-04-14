@@ -1,3 +1,4 @@
+file obj/kernel/kernel-i386.elf
 target remote :1234
 define hook-stop
 x/i $pc

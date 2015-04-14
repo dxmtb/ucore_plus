@@ -349,7 +349,10 @@ void pmm_init(void)
 	boot_pgdir[0] = boot_pgdir[PDX(KERNBASE)];
 	boot_pgdir[1] = boot_pgdir[PDX(KERNBASE) + 1];
 
+    kprintf("Before paging\n");
 	enable_paging();
+    extern bool after_paging;
+    after_paging = 1;
 
 	//reload gdt(third time,the last time) to map all physical memory
 	//virtual_addr 0~4G=liear_addr 0~4G
@@ -358,6 +361,12 @@ void pmm_init(void)
 
 	//disable the map of virtual_addr 0~4M
 	boot_pgdir[0] = boot_pgdir[1] = 0;
+
+    extern void *uart_begin;
+    uart_begin = ioremap(0xff010180);
+    kprintf("uart map from %x to %x\n", 0xff010180, uart_begin);
+
+    kprintf("After ioremap\n");
 
 	//now the basic virtual memory map(see memalyout.h) is established.
 	//check the correctness of the basic virtual memory map.
@@ -444,6 +453,23 @@ void tlb_invalidate(pde_t * pgdir, uintptr_t la)
 	if (rcr3() == PADDR(pgdir)) {
 		invlpg((void *)la);
 	}
+}
+
+// map physical addr to some va (one page only currently)
+void *ioremap(uintptr_t phys_addr)
+{
+    struct Page *p = alloc_page();
+    if (p == NULL) {
+        kprintf("Failed to ioremap addr %lx", phys_addr);
+        return NULL;
+    }
+    intptr_t va = (intptr_t)page2kva(p);
+    assert((va & 0xFFF) == 0);
+    pte_t *ptep = get_pte(boot_pgdir, va, 1);
+    assert(ptep != NULL);
+    *ptep = (phys_addr & ~0xFFF) | PTE_P | PTE_W;
+    void *ret = (void*)(va + (phys_addr & 0xFFF));
+    return ret;
 }
 
 void check_boot_pgdir(void)

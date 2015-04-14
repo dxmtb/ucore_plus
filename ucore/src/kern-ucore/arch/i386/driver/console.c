@@ -198,13 +198,20 @@ static void serial_putc(int c)
 	}
 }
 
-static void mmio_putc(int c)
+bool after_paging = 0;
+char *uart_begin = NULL;
+static void uart_putc(int c)
 {
+    if (after_paging && uart_begin == NULL)
+        return ;
     extern char mmio asm("%gs:0");
-    mmio = c;
+    if (uart_begin)
+        *uart_begin = c;
+    else
+        mmio = c;
     // maybe we need wait for uart?
     volatile int i = 0;
-    for (i = 0; i < 100; i++);
+    for (i = 0; i < 1000; i++);
 }
 
 /* *
@@ -432,22 +439,17 @@ void cons_init(void)
 /* cons_putc - print a single character @c to console devices */
 void cons_putc(int c)
 {
-    if (c == '\n') {
-        mmio_putc('\r');
-        mmio_putc('\n');
-    } else {
-        mmio_putc(c);
-    }
-    /*
-	bool intr_flag;
-	local_intr_save(intr_flag);
-	{
-		lpt_putc(c);
-		cga_putc(c);
-		serial_putc(c);
-	}
-	local_intr_restore(intr_flag);
-    */
+    if (c == '\n')
+        uart_putc('\r');
+    uart_putc(c);
+//	bool intr_flag;
+//	local_intr_save(intr_flag);
+//	{
+//		lpt_putc(c);
+//		cga_putc(c);
+//		serial_putc(c);
+//	}
+//	local_intr_restore(intr_flag);
 }
 
 /* *
