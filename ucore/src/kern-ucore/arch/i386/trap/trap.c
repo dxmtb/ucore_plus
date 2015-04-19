@@ -186,6 +186,7 @@ static void trap_dispatch(struct trapframe *tf)
 		syscall();
 		break;
 	case IRQ_OFFSET + IRQ_TIMER:
+        kprintf("ticks %d\n", ticks);
 		ticks++;
 		assert(current != NULL);
 		run_timer_list();

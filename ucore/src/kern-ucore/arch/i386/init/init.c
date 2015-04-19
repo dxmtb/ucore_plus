@@ -25,7 +25,7 @@ int kern_init(void)
 	extern char edata[], end[];
 	memset(edata, 0, end - edata);
 
-	//cons_init();		// init the console
+	cons_init();		// init the console
 
 	const char *message = "(THU.CST) os is loading ...";
 	kprintf("%s\n\n", message);
@@ -50,7 +50,9 @@ int kern_init(void)
 	sync_init();		// init sync struct
 
     kprintf("Everything before fs done\n");
-	ide_init();		// init ide devices
+	// ide_init();		// init ide devices
+    check_initrd();
+    ramdisk_init();
 #ifdef UCONFIG_SWAP
 	swap_init();		// init swap
 #endif

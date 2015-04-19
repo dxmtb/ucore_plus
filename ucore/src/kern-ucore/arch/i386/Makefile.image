@@ -2,6 +2,16 @@ ifneq ($(MAKECMDGOALS),clean)
 include $(KCONFIG_AUTOCONFIG)
 endif
 
+ifdef UCONFIG_HAVE_RAMDISK
+__CMD := case $(UCONFIG_RAMDISK_FILE) in /*) echo 1;; esac
+ifeq ($(shell $(__CMD)), 1)
+RAMDISK_FILE := $(shell echo $(UCONFIG_RAMDISK_FILE))
+else
+RAMDISK_FILE := $(OBJPATH_ROOT)/$(shell echo $(UCONFIG_RAMDISK_FILE))
+endif
+RAMDISK_OBJ := $(RAMDISK_FILE).o
+endif
+
 BLTREE = $(TOPDIR)/src/bootloader
 
 KERNEL_IMG := $(OBJPATH_ROOT)/kernel.img
@@ -27,6 +37,15 @@ $(LINK_FILE): $(LINK_FILE_IN) $(KCONFIG_AUTOCONFIG)
 
 $(BOOTSECT): $(OBJPATH_ROOT)
 	$(Q)$(MAKE) -C $(BLTREE) -f $(BLTREE)/Makefile all
+
+INITRD_PIGGY_S:=$(KTREE_OBJ_ROOT)/arch/$(ARCH)/tools/initrd.S
+$(RAMDISK_OBJ): $(RAMDISK_FILE)
+	@echo "Linking Initrd into kernel, using $(RAMDISK_FILE)"
+	@mkdir -p $(KTREE_OBJ_ROOT)/arch/$(ARCH)/tools
+	@sed "s#DATA_FILE#$(RAMDISK_FILE)#" < $(KTREE)/arch/$(ARCH)/tools/initrd.S.in > $(INITRD_PIGGY_S)
+	$(Q)$(TARGET_CC) $(TARGET_CFLAGS) -c $(INITRD_PIGGY_S) -o $@
+	$(Q)rm -f $(INITRD_PIGGY_S)
+
 
 .PHONY: all clean FORCE
 all: $(KERNEL_IMG)

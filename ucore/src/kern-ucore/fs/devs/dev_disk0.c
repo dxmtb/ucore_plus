@@ -43,7 +43,7 @@ static void disk0_read_blks_nolock(uint32_t blkno, uint32_t nblks)
 	uint32_t sectno = blkno * DISK0_BLK_NSECT, nsecs =
 	    nblks * DISK0_BLK_NSECT;
 	if ((ret =
-	     ide_read_secs(DISK0_DEV_NO, sectno, disk0_buffer, nsecs)) != 0) {
+	     ramdisk_read(sectno, disk0_buffer, nsecs)) != 0) {
 		panic
 		    ("disk0: read blkno = %d (sectno = %d), nblks = %d (nsecs = %d): 0x%08x.\n",
 		     blkno, sectno, nblks, nsecs, ret);
@@ -56,7 +56,7 @@ static void disk0_write_blks_nolock(uint32_t blkno, uint32_t nblks)
 	uint32_t sectno = blkno * DISK0_BLK_NSECT, nsecs =
 	    nblks * DISK0_BLK_NSECT;
 	if ((ret =
-	     ide_write_secs(DISK0_DEV_NO, sectno, disk0_buffer, nsecs)) != 0) {
+	     ramdisk_write(sectno, disk0_buffer, nsecs)) != 0) {
 		panic
 		    ("disk0: write blkno = %d (sectno = %d), nblks = %d (nsecs = %d): 0x%08x.\n",
 		     blkno, sectno, nblks, nsecs, ret);
@@ -118,10 +118,10 @@ static void disk0_device_init(struct device *dev)
 {
 	memset(dev, 0, sizeof(*dev));
 	static_assert(DISK0_BLKSIZE % SECTSIZE == 0);
-	if (!ide_device_valid(DISK0_DEV_NO)) {
+	if (!check_initrd()) {
 		panic("disk0 device isn't available.\n");
 	}
-	dev->d_blocks = ide_device_size(DISK0_DEV_NO) / DISK0_BLK_NSECT;
+	dev->d_blocks = ramdisk_size() / DISK0_BLK_NSECT;
 	dev->d_blocksize = DISK0_BLKSIZE;
 	dev->d_open = disk0_open;
 	dev->d_close = disk0_close;

@@ -205,14 +205,24 @@ static void uart_putc(int c)
     if (after_paging && uart_begin == NULL)
         return ;
     extern char mmio asm("%gs:0");
-    if (uart_begin)
+    if (uart_begin) {
+        while (((*(uart_begin + 5)) & 0x20) == 0);
         *uart_begin = c;
-    else
+    } else {
         mmio = c;
-    // maybe we need wait for uart?
-    volatile int i = 0;
-    for (i = 0; i < 1000; i++);
+        // maybe we need wait for uart?
+        volatile int i = 0;
+        for (i = 0; i < 1000; i++);
+    }
 }
+
+static int uart_getc(void)
+{
+    if (((*(uart_begin + 5)) & 1) != 0)
+        return -1;
+    return *uart_begin & 0xff;
+}
+
 
 /* *
  * Here we manage the console input buffer, where we stash characters
@@ -425,15 +435,24 @@ static void kbd_init(void)
 	pic_enable(IRQ_KBD);
 }
 
+void uart_intr(void)
+{
+	cons_intr(uart_getc);
+}
+
+#define EDISON
+
 /* cons_init - initializes the console devices */
 void cons_init(void)
 {
+#ifndef EDISON
 	cga_init();
 	serial_init();
 	kbd_init();
 	if (!serial_exists) {
 		kprintf("serial port does not exist!!\n");
 	}
+#endif
 }
 
 /* cons_putc - print a single character @c to console devices */
@@ -442,14 +461,16 @@ void cons_putc(int c)
     if (c == '\n')
         uart_putc('\r');
     uart_putc(c);
-//	bool intr_flag;
-//	local_intr_save(intr_flag);
-//	{
-//		lpt_putc(c);
-//		cga_putc(c);
-//		serial_putc(c);
-//	}
-//	local_intr_restore(intr_flag);
+#ifndef EDISON
+	bool intr_flag;
+	local_intr_save(intr_flag);
+	{
+		lpt_putc(c);
+		cga_putc(c);
+		serial_putc(c);
+	}
+	local_intr_restore(intr_flag);
+#endif
 }
 
 /* *
@@ -465,8 +486,12 @@ int cons_getc(void)
 		// poll for any pending input characters,
 		// so that this function works even when interrupts are disabled
 		// (e.g., when called from the kernel monitor).
+#ifdef EDISON
+        uart_intr();
+#else
 		serial_intr();
 		kbd_intr();
+#endif
 
 		// grab the next character from the input buffer.
 		if (cons.rpos != cons.wpos) {

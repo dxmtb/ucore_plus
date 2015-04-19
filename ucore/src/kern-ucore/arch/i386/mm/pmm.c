@@ -12,6 +12,7 @@
 #include <proc.h>
 #include <kio.h>
 #include <mp.h>
+#include <ramdisk.h>
 
 /* *
  * Task State Segment:
@@ -344,10 +345,15 @@ void pmm_init(void)
 	//But shouldn't use this map until enable_paging() & gdt_init() finished.
 	boot_map_segment(boot_pgdir, KERNBASE, KMEMSIZE, 0, PTE_W);
 
+    boot_map_segment(boot_pgdir, DISK_FS_VBASE,
+            ROUNDUP(initrd_end - initrd_begin, PGSIZE),
+            (uintptr_t) PADDR(initrd_begin), PTE_W);
+
 	//temporary map: 
 	//virtual_addr 3G~3G+4M = linear_addr 0~4M = linear_addr 3G~3G+4M = phy_addr 0~4M   
-	boot_pgdir[0] = boot_pgdir[PDX(KERNBASE)];
-	boot_pgdir[1] = boot_pgdir[PDX(KERNBASE) + 1];
+    int i;
+    for (i = 0; i < 65; i++)
+        boot_pgdir[i] = boot_pgdir[PDX(KERNBASE) + i];
 
     kprintf("Before paging\n");
 	enable_paging();
@@ -360,7 +366,9 @@ void pmm_init(void)
 	gdt_init();
 
 	//disable the map of virtual_addr 0~4M
-	boot_pgdir[0] = boot_pgdir[1] = 0;
+    i = 0;
+    for (i = 0; i < 65; i++)
+        boot_pgdir[i] = 0;
 
     extern void *uart_begin;
     uart_begin = ioremap(0xff010180);
