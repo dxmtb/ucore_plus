@@ -109,6 +109,7 @@ static void serial_init(void)
 
 	if (serial_exists) {
 		pic_enable(IRQ_COM1);
+		ioapicenable(IRQ_COM1);
 	}
 }
 
@@ -198,16 +199,42 @@ static void serial_putc(int c)
 	}
 }
 
+#define SERIAL_BASE_ADDR (uart_begin)
+
+#define XMTRDY			0x20
+#define LSR_DR		(0x01)
+
+#define DLAB		0x80
+
+#define TXR             0	/*  Transmit register (WRITE) */
+#define RXR             0	/*  Receive register  (READ)  */
+#define IER             1	/*  Interrupt Enable          */
+#define IIR             2	/*  Interrupt ID              */
+#define FCR             2	/*  FIFO control              */
+#define LCR             3	/*  Line control              */
+#define MCR             4	/*  Modem control             */
+#define LSR             5	/*  Line Status               */
+#define MSR             6	/*  Modem Status              */
+#define DLL             0	/*  Divisor Latch Low         */
+#define DLH             1	/*  Divisor latch High        */
+#define MUL				0x34	/*  DDS Multiplier                        */
+#define DIV				0x38	/*  DDS Divisor                           */
+
+#define readb(addr) (*(volatile unsigned char *) (addr))
+#define writeb(b,addr) (*(volatile unsigned char *) (addr) = (b))
+#define cpu_relax() asm volatile("rep; nop")
+
 bool after_paging = 0;
-char *uart_begin = NULL;
+volatile unsigned char *uart_begin = NULL;
 static void uart_putc(int c)
 {
     if (after_paging && uart_begin == NULL)
         return ;
-    extern char mmio asm("%gs:0");
+    extern volatile unsigned char mmio asm("%gs:0");
     if (uart_begin) {
-        while (((*(uart_begin + 5)) & 0x20) == 0);
-        *uart_begin = c;
+        while ((readb(SERIAL_BASE_ADDR + LSR) & XMTRDY) == 0)
+            cpu_relax();
+        writeb(c, SERIAL_BASE_ADDR + TXR);
     } else {
         mmio = c;
         // maybe we need wait for uart?
@@ -218,9 +245,12 @@ static void uart_putc(int c)
 
 static int uart_getc(void)
 {
-    if (((*(uart_begin + 5)) & 1) != 0)
+    if ((readb(SERIAL_BASE_ADDR + LSR) & LSR_DR) != 0) {
+        kprintf("tried uart_getc, failed\n");
         return -1;
-    return *uart_begin & 0xff;
+    }
+
+	return readb(SERIAL_BASE_ADDR + RXR) & 0xff;
 }
 
 
@@ -433,6 +463,7 @@ static void kbd_init(void)
 	// drain the kbd buffer
 	kbd_intr();
 	pic_enable(IRQ_KBD);
+    ioapicenable(IRQ_KBD, 0);
 }
 
 void uart_intr(void)
@@ -458,9 +489,6 @@ void cons_init(void)
 /* cons_putc - print a single character @c to console devices */
 void cons_putc(int c)
 {
-    if (c == '\n')
-        uart_putc('\r');
-    uart_putc(c);
 #ifndef EDISON
 	bool intr_flag;
 	local_intr_save(intr_flag);
@@ -470,6 +498,10 @@ void cons_putc(int c)
 		serial_putc(c);
 	}
 	local_intr_restore(intr_flag);
+#else
+    if (c == '\n')
+        uart_putc('\r');
+    uart_putc(c);
 #endif
 }
 

@@ -186,17 +186,27 @@ static void trap_dispatch(struct trapframe *tf)
 		syscall();
 		break;
 	case IRQ_OFFSET + IRQ_TIMER:
-        kprintf("ticks %d\n", ticks);
+        if (ticks % 100 == 0)
+            kprintf("ticks %d\n", ticks);
 		ticks++;
-		assert(current != NULL);
-		run_timer_list();
+		if (current != NULL)
+            run_timer_list();
+        else
+            kprintf("warning: current == NULL when tick\n");
+        lapiceoi();
 		break;
 	case IRQ_OFFSET + IRQ_COM1:
 	case IRQ_OFFSET + IRQ_KBD:
+	case 54:
+        kprintf("keyboard\n");
+        if (0) {
 		c = cons_getc();
 
 		extern void dev_stdin_write(char c);
 		dev_stdin_write(c);
+        }
+        // shouldn't happen maybe?
+        lapiceoi();
 		break;
 	case IRQ_OFFSET + IRQ_IDE1:
 	case IRQ_OFFSET + IRQ_IDE2:

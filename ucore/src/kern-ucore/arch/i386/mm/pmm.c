@@ -466,17 +466,18 @@ void tlb_invalidate(pde_t * pgdir, uintptr_t la)
 // map physical addr to some va (one page only currently)
 void *ioremap(uintptr_t phys_addr)
 {
-    struct Page *p = alloc_page();
-    if (p == NULL) {
+    static uintptr_t va = KERNTOP;
+    if (va >= VPT) {
         kprintf("Failed to ioremap addr %lx", phys_addr);
         return NULL;
     }
-    intptr_t va = (intptr_t)page2kva(p);
     assert((va & 0xFFF) == 0);
     pte_t *ptep = get_pte(boot_pgdir, va, 1);
     assert(ptep != NULL);
     *ptep = (phys_addr & ~0xFFF) | PTE_P | PTE_W;
     void *ret = (void*)(va + (phys_addr & 0xFFF));
+    kprintf("ioremap from %x to %x\n", phys_addr, ret);
+    va += PGSIZE;
     return ret;
 }
 
