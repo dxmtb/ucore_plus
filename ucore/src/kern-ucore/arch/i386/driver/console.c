@@ -243,10 +243,17 @@ static void uart_putc(int c)
     }
 }
 
-static int uart_getc(void)
+static int uart_line_status(void) {
+    return readb(SERIAL_BASE_ADDR + LSR) & LSR_DR;
+}
+
+int uart_tstc(void) {
+    return uart_line_status() != 0;
+}
+
+int uart_getc(void)
 {
-    if ((readb(SERIAL_BASE_ADDR + LSR) & LSR_DR) != 0) {
-        kprintf("tried uart_getc, failed\n");
+    if (!uart_tstc()) {
         return -1;
     }
 
