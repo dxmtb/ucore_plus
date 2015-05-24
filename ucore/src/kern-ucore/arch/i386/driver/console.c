@@ -109,6 +109,7 @@ static void serial_init(void)
 
 	if (serial_exists) {
 		pic_enable(IRQ_COM1);
+		ioapicenable(IRQ_COM1, 0);
 	}
 }
 
@@ -407,6 +408,7 @@ static void kbd_init(void)
 	// drain the kbd buffer
 	kbd_intr();
 	pic_enable(IRQ_KBD);
+    ioapicenable(IRQ_KBD, 0);
 }
 
 /* cons_init - initializes the console devices */

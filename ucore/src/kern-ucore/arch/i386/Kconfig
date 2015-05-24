@@ -1,4 +1,22 @@
 source src/kern-ucore/Kconfig
+
+menu "Ucore Kernel Configuration (ARM)"
+
+config HAVE_RAMDISK
+  bool "Enable Ramdisk"
+  default y
+
+config RAMDISK_FILE
+  depends HAVE_RAMDISK
+  string "Ramdisk File"
+  default "sfs.img"
+  help
+    Path to the ramdisk which will be built into the kernel image. Both absolute
+    and relative paths are acceptable..Relative paths are considered to be from
+    the building directory.
+
+endmenu
+
 source src/kern-ucore/numa/Kconfig
 source src/kern-ucore/mm/Kconfig
 source src/kern-ucore/schedule/Kconfig

@@ -21,12 +21,14 @@
         })
 
 static inline uint8_t inb(uint16_t port) __attribute__ ((always_inline));
+static inline uint32_t inl(uint16_t port) __attribute__((always_inline));
 static inline void insl(uint32_t port, void *addr, int cnt)
     __attribute__ ((always_inline));
 static inline void outb(uint16_t port, uint8_t data)
     __attribute__ ((always_inline));
 static inline void outw(uint16_t port, uint16_t data)
     __attribute__ ((always_inline));
+static inline void outl(uint16_t port, uint32_t data) __attribute__((always_inline));
 static inline void outsl(uint32_t port, const void *addr, int cnt)
     __attribute__ ((always_inline));
 static inline uint32_t read_ebp(void) __attribute__ ((always_inline));
@@ -63,6 +65,13 @@ static inline uint8_t inb(uint16_t port)
 	return data;
 }
 
+static inline uint32_t inl(uint16_t port)
+{
+	uint32_t data;
+	__asm __volatile("inl %w1,%0" : "=a" (data) : "d" (port));
+	return data;
+}
+
 static inline void insl(uint32_t port, void *addr, int cnt)
 {
 	asm volatile ("cld;" "repne; insl;":"=D" (addr), "=c"(cnt)
@@ -78,6 +87,11 @@ static inline void outb(uint16_t port, uint8_t data)
 static inline void outw(uint16_t port, uint16_t data)
 {
 	asm volatile ("outw %0, %1"::"a" (data), "d"(port));
+}
+
+static inline void outl(uint16_t port, uint32_t data)
+{
+	__asm __volatile("outl %0,%w1" : : "a" (data), "d" (port));
 }
 
 static inline void outsl(uint32_t port, const void *addr, int cnt)

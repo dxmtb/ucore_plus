@@ -58,6 +58,8 @@ void tlb_update(pde_t * pgdir, uintptr_t la);
 void tlb_invalidate(pde_t * pgdir, uintptr_t la);
 void tlb_invalidate_user(void);
 
+void *ioremap(uintptr_t phys_addr);
+
 struct Page *pgdir_alloc_page(pde_t * pgdir, uintptr_t la, uint32_t perm);
 void unmap_range(pde_t * pgdir, uintptr_t start, uintptr_t end);
 void exit_range(pde_t * pgdir, uintptr_t start, uintptr_t end);

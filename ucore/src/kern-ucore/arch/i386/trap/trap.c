@@ -189,6 +189,7 @@ static void trap_dispatch(struct trapframe *tf)
 		ticks++;
 		assert(current != NULL);
 		run_timer_list();
+        lapiceoi();
 		break;
 	case IRQ_OFFSET + IRQ_COM1:
 	case IRQ_OFFSET + IRQ_KBD:
@@ -196,6 +197,7 @@ static void trap_dispatch(struct trapframe *tf)
 
 		extern void dev_stdin_write(char c);
 		dev_stdin_write(c);
+        lapiceoi();
 		break;
 	case IRQ_OFFSET + IRQ_IDE1:
 	case IRQ_OFFSET + IRQ_IDE2:

@@ -12,6 +12,7 @@
 #include <proc.h>
 #include <kio.h>
 #include <mp.h>
+#include <ramdisk.h>
 
 /* *
  * Task State Segment:
@@ -344,10 +345,15 @@ void pmm_init(void)
 	//But shouldn't use this map until enable_paging() & gdt_init() finished.
 	boot_map_segment(boot_pgdir, KERNBASE, KMEMSIZE, 0, PTE_W);
 
+    boot_map_segment(boot_pgdir, DISK_FS_VBASE,
+            ROUNDUP(initrd_end - initrd_begin, PGSIZE),
+            (uintptr_t) PADDR(initrd_begin), PTE_W);
+
 	//temporary map: 
 	//virtual_addr 3G~3G+4M = linear_addr 0~4M = linear_addr 3G~3G+4M = phy_addr 0~4M   
-	boot_pgdir[0] = boot_pgdir[PDX(KERNBASE)];
-	boot_pgdir[1] = boot_pgdir[PDX(KERNBASE) + 1];
+    int i;
+    for (i = 0; i < 65; i++)
+        boot_pgdir[i] = boot_pgdir[PDX(KERNBASE) + i];
 
 	enable_paging();
 
@@ -357,7 +363,9 @@ void pmm_init(void)
 	gdt_init();
 
 	//disable the map of virtual_addr 0~4M
-	boot_pgdir[0] = boot_pgdir[1] = 0;
+    i = 0;
+    for (i = 0; i < 65; i++)
+        boot_pgdir[i] = 0;
 
 	//now the basic virtual memory map(see memalyout.h) is established.
 	//check the correctness of the basic virtual memory map.
@@ -444,6 +452,24 @@ void tlb_invalidate(pde_t * pgdir, uintptr_t la)
 	if (rcr3() == PADDR(pgdir)) {
 		invlpg((void *)la);
 	}
+}
+
+// map physical addr to some va (one page only currently)
+void *ioremap(uintptr_t phys_addr)
+{
+    static uintptr_t va = KERNTOP;
+    if (va >= VPT) {
+        kprintf("Failed to ioremap addr %lx", phys_addr);
+        return NULL;
+    }
+    assert((va & 0xFFF) == 0);
+    pte_t *ptep = get_pte(boot_pgdir, va, 1);
+    assert(ptep != NULL);
+    *ptep = (phys_addr & ~0xFFF) | PTE_P | PTE_W;
+    void *ret = (void*)(va + (phys_addr & 0xFFF));
+    kprintf("ioremap from %x to %x\n", phys_addr, ret);
+    va += PGSIZE;
+    return ret;
 }
 
 void check_boot_pgdir(void)
