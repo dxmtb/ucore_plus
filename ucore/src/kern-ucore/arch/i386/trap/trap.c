@@ -156,10 +156,20 @@ static int pgfault_handler(struct trapframe *tf)
 	return do_pgfault(mm, tf->tf_err, rcr2());
 }
 
-static void trap_dispatch(struct trapframe *tf)
-{
+static void check_uart() {
 	char c;
 
+    while(uart_tstc()) {
+        c = cons_getc();
+        if (c != -1) {
+            // kprintf("get char: %d %c\n", c, c);
+            dev_stdin_write(c);
+        }
+    }
+}
+
+static void trap_dispatch(struct trapframe *tf)
+{
 	int ret;
 	switch (tf->tf_trapno) {
 	case T_DEBUG:
@@ -186,10 +196,7 @@ static void trap_dispatch(struct trapframe *tf)
 		syscall();
 		break;
 	case IRQ_OFFSET + IRQ_TIMER:
-        while(uart_tstc()) {
-            c = cons_getc();
-            dev_stdin_write(c);
-        }
+        check_uart();
 		ticks++;
 		if (current != NULL)
             run_timer_list();
@@ -200,6 +207,7 @@ static void trap_dispatch(struct trapframe *tf)
 	case IRQ_OFFSET + IRQ_COM1:
 	case IRQ_OFFSET + IRQ_KBD:
 	case 54:
+        //check_uart();
 //        kprintf("keyboard\n");
 //        if (0) {
 //		c = cons_getc();
@@ -213,6 +221,7 @@ static void trap_dispatch(struct trapframe *tf)
 	case IRQ_OFFSET + IRQ_IDE1:
 	case IRQ_OFFSET + IRQ_IDE2:
 		/* do nothing */
+        assert(0);
 		break;
 	default:
 		print_trapframe(tf);
