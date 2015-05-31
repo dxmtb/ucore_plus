@@ -65,7 +65,7 @@ int kern_init(void)
     ioapicenable(IRQ_KBD, 0);
     ioapicenable(IRQ_COM1, 0);
 
-    pci_init();
+    e1000_probe(0, 0);
 	/* do nothing */
 	cpu_idle();		// run idle process
 }

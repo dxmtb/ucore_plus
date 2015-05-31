@@ -3,7 +3,6 @@
 #include <string.h>
 #include <pci.h>
 #include <pcireg.h>
-#include <e1000.h>
 
 // Flag to do "lspci" at bootup
 static int pci_show_devs = 1;
@@ -16,10 +15,13 @@ static uint32_t pci_conf1_data_ioport = 0x0cfc;
 // Forward declarations
 static int pci_bridge_attach(struct pci_func *pcif);
 
+struct pci_dev;
+struct pci_device_id;
+
 // PCI driver table
 struct pci_driver {
     uint32_t key1, key2;
-    int (*attachfn) (struct pci_func *pcif);
+    int (*attachfn) (struct pci_dev *pdev, const struct pci_device_id *ent);
 };
 
 struct pci_driver pci_attach_class[] = {
@@ -28,7 +30,7 @@ struct pci_driver pci_attach_class[] = {
 };
 
 struct pci_driver pci_attach_vendor[] = {
-    { E1000_VENDOR_ID, E1000_DEV_ID, &attach_e1000 },
+    { 0x8086, 0x100E, &e1000_probe },
     { 0, 0, 0 },
 };
 
@@ -228,5 +230,7 @@ pci_init(void)
     static struct pci_bus root_bus;
     memset(&root_bus, 0, sizeof(root_bus));
 
-    return pci_scan_bus(&root_bus);
+    int ret = pci_scan_bus(&root_bus);
+    kprintf("pci_init done\n");
+    return ret;
 }

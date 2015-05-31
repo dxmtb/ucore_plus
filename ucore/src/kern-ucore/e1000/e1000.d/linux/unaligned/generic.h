@@ -1,0 +1,4 @@
+#ifndef __LINUX_UNALIGNED_GENERIC_H__
+#define __LINUX_UNALIGNED_GENERIC_H__
+
+#endif /* ! __LINUX_UNALIGNED_GENERIC_H__ */

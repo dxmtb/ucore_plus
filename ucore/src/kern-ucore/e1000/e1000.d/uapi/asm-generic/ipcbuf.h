@@ -1,0 +1,4 @@
+#ifndef __UAPI_ASM_GENERIC_IPCBUF_H__
+#define __UAPI_ASM_GENERIC_IPCBUF_H__
+
+#endif /* ! __UAPI_ASM_GENERIC_IPCBUF_H__ */
