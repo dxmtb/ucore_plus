@@ -53,7 +53,7 @@ lapicw(int index, int value)
 void
 lapic_init(void)
 {
-  lapic = ioremap(APIC_DEFAULT_PHYS_BASE);
+  lapic = ioremap(APIC_DEFAULT_PHYS_BASE, PGSIZE);
   kprintf("lapic map from %x to %x\n", APIC_DEFAULT_PHYS_BASE, lapic);
 
   // Enable local APIC; set spurious interrupt vector.

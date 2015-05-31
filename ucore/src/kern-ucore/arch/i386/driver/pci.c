@@ -3,6 +3,7 @@
 #include <string.h>
 #include <pci.h>
 #include <pcireg.h>
+#include <e1000.h>
 
 // Flag to do "lspci" at bootup
 static int pci_show_devs = 1;
@@ -26,12 +27,10 @@ struct pci_driver pci_attach_class[] = {
     { 0, 0, 0 },
 };
 
-/*
 struct pci_driver pci_attach_vendor[] = {
-    { E100_VENDOR, E100_PRODUCT, &e100_attach },
+    { E1000_VENDOR_ID, E1000_DEV_ID, &attach_e1000 },
     { 0, 0, 0 },
 };
-*/
 
 static void
 pci_conf1_set_addr(uint32_t bus,
@@ -90,9 +89,9 @@ static int
 pci_attach(struct pci_func *f)
 {
 	return pci_attach_match(PCI_CLASS(f->dev_class), PCI_SUBCLASS(f->dev_class),
-			 &pci_attach_class[0], f);/* ||
+			 &pci_attach_class[0], f) ||
 	pci_attach_match(PCI_VENDOR(f->dev_id), PCI_PRODUCT(f->dev_id),
-			 &pci_attach_vendor[0], f); */
+			 &pci_attach_vendor[0], f);
 }
 
 static int 

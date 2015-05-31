@@ -454,22 +454,25 @@ void tlb_invalidate(pde_t * pgdir, uintptr_t la)
 	}
 }
 
-// map physical addr to some va (one page only currently)
-void *ioremap(uintptr_t phys_addr)
+// map physical addr to some va
+void *ioremap(uintptr_t pa, size_t size)
 {
-    static uintptr_t va = KERNTOP;
-    if (va >= VPT) {
-        kprintf("Failed to ioremap addr %lx", phys_addr);
-        return NULL;
-    }
-    assert((va & 0xFFF) == 0);
-    pte_t *ptep = get_pte(boot_pgdir, va, 1);
-    assert(ptep != NULL);
-    *ptep = (phys_addr & ~0xFFF) | PTE_P | PTE_W;
-    void *ret = (void*)(va + (phys_addr & 0xFFF));
-    kprintf("ioremap from %x to %x\n", phys_addr, ret);
-    va += PGSIZE;
-    return ret;
+    static uintptr_t base = KERNTOP;
+	size_t map_size = ROUNDUP(size, PGSIZE);
+	if (base + map_size > VPT) {
+		panic("ioremap: overflow on MMIO map region");
+	}
+	uintptr_t va = base + PGOFF(pa);
+
+	// Map region. va and pa page aligned. map_size multiple of size.
+	boot_map_segment(boot_pgdir, va, map_size, pa, PTE_W);
+	boot_map_segment(boot_pgdir, KERNBASE, KMEMSIZE, 0, PTE_W);
+
+	// Update base
+	base += map_size;
+
+	// Return base of mapped region
+	return (void *) (base - map_size);
 }
 
 void check_boot_pgdir(void)
