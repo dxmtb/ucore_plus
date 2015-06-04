@@ -89,7 +89,7 @@
 /* Functions headers */
 int attach_e1000(struct pci_func *pcif);
 void transmit_packet(void *buf, size_t size);
-void receive_packet(void *buf, size_t* size_store);
+int receive_packet(void *buf, size_t size);
 void get_mac_address(void *buf);
 
 /* Structures */

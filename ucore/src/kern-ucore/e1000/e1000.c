@@ -1,6 +1,10 @@
 #include <arch.h>
 #include <pmm.h>
 #include <e1000.h>
+#include "ipv4/lwip/ip_addr.h"
+#include "ipv4/lwip/ip.h"
+#include "lwip/netif.h"
+#include "netif/etharp.h"
 
 volatile uint32_t *e1000; // Pointer to the start of E1000's MMIO region
 uint8_t mac_address[6]; // Mac address, 6 bytes
@@ -8,6 +12,7 @@ struct tx_desc *tx_ring;
 char *tx_buffers[NUM_TX_DESC];
 struct rx_desc *rx_ring;
 char *rx_buffers[NUM_RX_DESC];
+struct netif netif;
 
 /* Auxiliary Funcions */
 static int e1000_page_alloc(char **va_store, int perm);
@@ -126,6 +131,13 @@ transmit_packet(void *buf, size_t size)
 	//        "buf=%p, with size=%d\n", buf, size);
 	//cprintf("tx_ring[tail].addr = %p\n", tx_ring[tail].addr);
 	//cprintf("tx_ring[tail].length = %d\n", tx_ring[tail].length);
+    /*
+    kprintf("transmit packet len %d:\n", size);
+    int i;
+    for (i = 0; i < size; i++)
+        cprintf("%x ", *(char*)(buf + i) & 0xff);
+    cprintf("\n");
+    */
 
 	// Update tail
 	tail = (tail + 1) % NUM_TX_DESC;
@@ -247,11 +259,11 @@ init_receive(void)
 //   Descriptors owned by software: DD and EOP is set
 //   Descriptors owned by hardware: DD and EOP are not set
 //   The desc. pointed by the tail is SW-owned, but holds no packet.
-void
-receive_packet(void *buf, size_t *size_store)
+int
+receive_packet(void *buf, size_t size)
 {
 	// Initial checkings
-	if (!buf || !size_store)
+	if (!buf)
 		panic("Null pointer passed");
 
 	uint32_t tail = E1000_REG(E1000_RDT);
@@ -266,7 +278,9 @@ receive_packet(void *buf, size_t *size_store)
 		// Attention: don't use the buffer address from the descriptor,
 		// since it's a physical address
 		memmove(buf, rx_buffers[next], (size_t)rx_ring[next].length);
-		*size_store = (size_t) rx_ring[next].length;
+        if (rx_ring[next].length > size)
+            return -1;
+		size = (size_t) rx_ring[next].length;
 
 		// Current tail becomes hw-owned (DD=0, EOP=0)
 		rx_ring[tail].status &= ~E1000_RXD_STAT_DD;
@@ -274,10 +288,19 @@ receive_packet(void *buf, size_t *size_store)
 
 		// Now make tail point to next
 		E1000_REG(E1000_RDT) = next;
+        /*
+        kprintf("Received packet len %d:\n", size);
+        int i;
+        for (i = 0; i < size; i++)
+            cprintf("%x ", *(char*)(buf + i) & 0xff);
+        cprintf("\n");
+        */
+        return size;
 	} else {
 		// The next descriptor is hardware owned. There's nothing to receive
 		/* Do nothing */
-		return;
+        //kprintf("Tried to receive but zero length\n");
+		return 0;
 	}
 }
 
@@ -330,6 +353,23 @@ get_mac_address(void *buf)
 	}
 }
 
+err_t ethernetif_init(struct netif *netif);
+
+void e1000_rx_thread(void *arg)
+{
+    while(1)
+    {
+        uint32_t tail = E1000_REG(E1000_RDT);
+        uint32_t next = (tail+1)%NUM_RX_DESC;
+
+        // Analyzes if the next is sw owned(DD = 1) or hw owned (DD = 0)
+        if (rx_ring[next].status & E1000_RXD_STAT_DD) {
+            ethernetif_input(&netif);
+        }
+		do_sleep(50);
+    }
+}
+
 // Initialize the E1000, which is a PCI device
 // Returns 0 on success (always)
 int
@@ -355,8 +395,28 @@ attach_e1000(struct pci_func *pcif)
 	init_receive();
 
 	/* Debugging */
-	test_transmission();
-	test_receive();
+	//test_transmission();
+	//test_receive();
+
+    // init network interface
+	tcpip_init(0, 0);
+
+    struct ip_addr ipaddr;
+    IP4_ADDR(&ipaddr, 10, 0, 2, 15);
+    struct ip_addr netmask;
+    IP4_ADDR(&netmask, 255, 255, 255, 0);
+    struct ip_addr gw;
+    IP4_ADDR(&gw, 10, 0, 2, 2);
+
+    netif_add(&netif, &ipaddr, &netmask, &gw, 0, ethernetif_init, ethernet_input);
+    netif.hwaddr_len = 6;
+    memcpy(netif.hwaddr, mac_address, 6);
+    int pid = kernel_thread(e1000_rx_thread, 0, 0);
+	set_proc_name(find_proc(pid), "e1000-rx");
+    if (!(netif.flags & NETIF_FLAG_UP)) {
+        netif.flags |= NETIF_FLAG_UP;
+    }
+    //netif_set_up(&netif);
 
 	return 0;
 }
@@ -373,8 +433,7 @@ attach_e1000(struct pci_func *pcif)
 static int
 e1000_page_alloc(char **va_store, int perm)
 {
-    void *addr = kmalloc(PGSIZE);
-    *va_store = addr;
+    *va_store = kmalloc(PGSIZE);
 	return 0;
 }
 
@@ -502,11 +561,15 @@ test_receive(void)
 
 	// Try to receive a packet
 	cprintf("test_receive - calling receive_packet\n");
-	receive_packet(buf, &length);
+    int len;
+    while(1) {
+        if ((len = receive_packet(buf, 1024)) != 0) {
 
-	// Print the result
-	cprintf("test_receive - data on buf after receiving (first 1000 bytes):\n");
-	for (i = 0; i < 1000; i++)
-		cprintf("%d ", *(buf + i));
-	cprintf("\n");
+            // Print the result
+            cprintf("test_receive - data on buf after receiving len %d:\n", len);
+            for (i = 0; i < len; i++)
+                cprintf("%x ", *(buf + i) & 0xff);
+            cprintf("\n");
+        }
+    }
 }

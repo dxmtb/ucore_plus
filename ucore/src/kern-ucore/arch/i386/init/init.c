@@ -60,12 +60,15 @@ int kern_init(void)
 	//clock_init();		// init clock interrupt
 	mod_init();
 
+    pci_init();
+
 	intr_enable();		// enable irq interrupt
 
     ioapicenable(IRQ_KBD, 0);
     ioapicenable(IRQ_COM1, 0);
 
-    pci_init();
+    void httpd_main(int argc, char **argv);
+    sys_thread_new("http_server", httpd_main, 0, 0, 0);
 	/* do nothing */
 	cpu_idle();		// run idle process
 }
