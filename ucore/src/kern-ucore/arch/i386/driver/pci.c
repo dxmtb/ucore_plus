@@ -21,7 +21,7 @@ struct pci_device_id;
 // PCI driver table
 struct pci_driver {
     uint32_t key1, key2;
-    int (*attachfn) (struct pci_dev *pdev, const struct pci_device_id *ent);
+    int (*attachfn) (struct pci_func *pcif);
 };
 
 struct pci_driver pci_attach_class[] = {
@@ -29,8 +29,10 @@ struct pci_driver pci_attach_class[] = {
     { 0, 0, 0 },
 };
 
+void e1000_dde_init(struct pci_func *pcif);
+
 struct pci_driver pci_attach_vendor[] = {
-    { 0x8086, 0x100E, &e1000_probe },
+    { 0x8086, 0x100E, &e1000_dde_init },
     { 0, 0, 0 },
 };
 

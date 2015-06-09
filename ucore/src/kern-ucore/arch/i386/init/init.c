@@ -60,12 +60,13 @@ int kern_init(void)
 	//clock_init();		// init clock interrupt
 	mod_init();
 
+    pci_init();
+
 	intr_enable();		// enable irq interrupt
 
     ioapicenable(IRQ_KBD, 0);
     ioapicenable(IRQ_COM1, 0);
 
-    e1000_probe(0, 0);
 	/* do nothing */
 	cpu_idle();		// run idle process
 }

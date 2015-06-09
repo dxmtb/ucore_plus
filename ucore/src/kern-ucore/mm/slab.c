@@ -418,6 +418,10 @@ void *kmalloc(size_t size)
 	return kmem_cache_alloc(slab_cache + (order - MIN_SIZE_ORDER));
 }
 
+void *ucore_kmalloc(size_t size) {
+    return kmalloc(size);
+}
+
 static void kmem_cache_free(kmem_cache_t * cachep, void *obj);
 
 // kmem_slab_destroy - call free_pages & kmem_cache_free to free a slab 

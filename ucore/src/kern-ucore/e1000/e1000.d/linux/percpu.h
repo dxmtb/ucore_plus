@@ -66,4 +66,8 @@ do {									\
 # define __this_cpu_inc(pcp)		__this_cpu_add((pcp), 1)
 #endif
 
+#define alloc_percpu(type)      \
+    kmalloc(sizeof(type), 0)
+//        (typeof(type) __percpu *)__alloc_percpu(sizeof(type), __alignof__(type))
+
 #endif /* ! __LINUX_PERCPU_H__ */

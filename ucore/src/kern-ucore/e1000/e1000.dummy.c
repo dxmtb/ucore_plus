@@ -38,6 +38,7 @@
 #include <linux/timer.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
+
 #include <stdarg.h>
 
 #define DDE_WEAK __attribute__((weak))
@@ -45,11 +46,176 @@
 #define dde_dummy_printf(...) kprintf(__VA_ARGS__)
 #define dde_printf(...) dde_dummy_printf(__VA_ARGS__)
 
+void *ucore_kmalloc(size_t size);
+#define PTR_ALIGN(p, a)         ((typeof(p))ALIGN((unsigned long)(p), (a)))
+
+int dev_addr_init(struct net_device *dev) {
+     dev->dev_addr = ucore_kmalloc(MAX_ADDR_LEN);
+     return 0;
+}
+
+static int netif_alloc_netdev_queues(struct net_device *dev)
+{
+        unsigned int count = dev->num_tx_queues;
+        struct netdev_queue *tx;
+
+        BUG_ON(count < 1);
+
+        tx = ucore_kmalloc(count * sizeof(struct netdev_queue));
+        if (!tx)
+                return -ENOMEM;
+
+        dev->_tx = tx;
+
+        //netdev_for_each_tx_queue(dev, netdev_init_one_queue, NULL);
+        spin_lock_init(&dev->tx_global_lock);
+
+        return 0;
+}
+
+static int netif_alloc_rx_queues(struct net_device *dev)
+{
+        unsigned int i, count = dev->num_rx_queues;
+        struct netdev_rx_queue *rx;
+
+        BUG_ON(count < 1);
+
+        rx = ucore_kmalloc(count * sizeof(struct netdev_rx_queue));
+        if (!rx)
+                return -ENOMEM;
+
+        dev->_rx = rx;
+
+        for (i = 0; i < count; i++)
+                rx[i].dev = dev;
+        return 0;
+}
+
+/**
+ *      alloc_netdev_mqs - allocate network device
+ *      @sizeof_priv:   size of private data to allocate space for
+ *      @name:          device name format string
+ *      @setup:         callback to initialize device
+ *      @txqs:          the number of TX subqueues to allocate
+ *      @rxqs:          the number of RX subqueues to allocate
+ *
+ *      Allocates a struct net_device with private data area for driver use
+ *      and performs basic initialization.  Also allocates subquue structs
+ *      for each queue on the device.
+ */
+struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
+                void (*setup)(struct net_device *),
+                unsigned int txqs, unsigned int rxqs)
+{
+        struct net_device *dev;
+        size_t alloc_size;
+        struct net_device *p;
+
+        BUG_ON(strlen(name) >= sizeof(dev->name));
+
+        if (txqs < 1) {
+                pr_err("alloc_netdev: Unable to allocate device with zero queues\n");
+                return NULL;
+        }
+
+#ifdef CONFIG_RPS
+        if (rxqs < 1) {
+                pr_err("alloc_netdev: Unable to allocate device with zero RX queues\n");
+                return NULL;
+        }
+#endif
+
+        alloc_size = sizeof(struct net_device);
+        if (sizeof_priv) {
+                /* ensure 32-byte alignment of private area */
+                alloc_size = ALIGN(alloc_size, NETDEV_ALIGN);
+                alloc_size += sizeof_priv;
+        }
+        /* ensure 32-byte alignment of whole construct */
+        alloc_size += NETDEV_ALIGN - 1;
+
+        p = kzalloc(alloc_size, GFP_KERNEL);
+        if (!p)
+                return NULL;
+
+        dev = PTR_ALIGN(p, NETDEV_ALIGN);
+        dev->padded = (char *)dev - (char *)p;
+
+        dev->pcpu_refcnt = alloc_percpu(int);
+        if (!dev->pcpu_refcnt)
+                goto free_p;
+
+        if (dev_addr_init(dev))
+                goto free_pcpu;
+
+        dev_mc_init(dev);
+        dev_uc_init(dev);
+
+        //dev_net_set(dev, &init_net);
+
+        dev->gso_max_size = GSO_MAX_SIZE;
+        dev->gso_max_segs = GSO_MAX_SEGS;
+
+        INIT_LIST_HEAD(&dev->napi_list);
+        INIT_LIST_HEAD(&dev->unreg_list);
+        INIT_LIST_HEAD(&dev->link_watch_list);
+        INIT_LIST_HEAD(&dev->upper_dev_list);
+        //dev->priv_flags = IFF_XMIT_DST_RELEASE;
+        setup(dev);
+
+        dev->num_tx_queues = txqs;
+        dev->real_num_tx_queues = txqs;
+        if (netif_alloc_netdev_queues(dev))
+                goto free_all;
+
+#ifdef CONFIG_RPS
+        dev->num_rx_queues = rxqs;
+        dev->real_num_rx_queues = rxqs;
+        if (netif_alloc_rx_queues(dev))
+                goto free_all;
+#endif
+
+        strcpy(dev->name, name);
+//        dev->group = INIT_NETDEV_GROUP;
+//        if (!dev->ethtool_ops)
+//                dev->ethtool_ops = &default_ethtool_ops;
+        return dev;
+
+free_all:
+        free_netdev(dev);
+        return NULL;
+
+free_pcpu:
+        //free_percpu(dev->pcpu_refcnt);
+        kfree(dev->_tx);
+#ifdef CONFIG_RPS
+        kfree(dev->_rx);
+#endif
+
+free_p:
+        kfree(p);
+        return NULL;
+}
+void ether_setup(struct net_device *dev)
+{
+        //dev->header_ops         = &eth_header_ops;
+        //dev->type               = ARPHRD_ETHER;
+        dev->hard_header_len    = ETH_HLEN;
+        dev->mtu                = ETH_DATA_LEN;
+        dev->addr_len           = ETH_ALEN;
+        dev->tx_queue_len       = 1000; /* Ethernet wants good queues */
+        //dev->flags              = IFF_BROADCAST|IFF_MULTICAST;
+        //dev->priv_flags         |= IFF_TX_SKB_SHARING;
+
+        memset(dev->broadcast, 0xFF, ETH_ALEN);
+
+}
 /*
  */
-DDE_WEAK struct net_device * alloc_etherdev_mqs(int a, unsigned int b, unsigned int c) {
-	dde_printf("alloc_etherdev_mqs not implemented\n");
-	return 0;
+struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,
+        unsigned int rxqs)
+{
+    return alloc_netdev_mqs(sizeof_priv, "eth%d", ether_setup, txqs, rxqs);
 }
 
 /*
@@ -83,7 +249,7 @@ DDE_WEAK bool cancel_work_sync(struct work_struct * a) {
 /*
  */
 DDE_WEAK void __const_udelay(unsigned long a) {
-	dde_printf("__const_udelay not implemented\n");
+    __udelay(a);
 }
 
 /*
@@ -159,9 +325,9 @@ DDE_WEAK int dev_open(struct net_device * a) {
 
 /*
  */
-DDE_WEAK int dev_set_drvdata(struct device * a, void * b) {
-	dde_printf("dev_set_drvdata not implemented\n");
-	return 0;
+int dev_set_drvdata(struct device *dev, void *data) {
+    dev->p = data;
+    return 0;
 }
 
 /*
@@ -177,22 +343,39 @@ DDE_WEAK void disable_irq(unsigned int a) {
 	dde_printf("disable_irq not implemented\n");
 }
 
-/*
- */
-struct dma_map_ops * dma_ops;
-
-/*
- */
-DDE_WEAK int dma_set_mask(struct device * a, u64 b) {
-	dde_printf("dma_set_mask not implemented\n");
-	return 0;
+void *dma_generic_alloc_coherent(struct device *dev, size_t size,
+                                 dma_addr_t *dma_addr, gfp_t flag,
+                                 struct dma_attrs *attrs)
+{
+    return ucore_kmalloc(size);
 }
 
+struct dma_map_ops dde_dma_ops = {
+        .alloc                  = dma_generic_alloc_coherent,
+};
+
 /*
  */
-DDE_WEAK int dma_supported(struct device * a, u64 b) {
-	dde_printf("dma_supported not implemented\n");
-	return 0;
+struct dma_map_ops * dma_ops = &dde_dma_ops;;
+
+/*
+ */
+int dma_set_mask(struct device *dev, u64 mask)
+{
+//    if (!dev->dma_mask || !dma_supported(dev, mask))
+//        return -EIO;
+    if (!dev->dma_mask)
+        dev->dma_mask = ucore_kmalloc(sizeof(dev->dma_mask));
+
+    *dev->dma_mask = mask;
+
+    return 0;
+}
+
+int dma_supported(struct device *dev, u64 mask)
+{
+    // Always assume dma is supported (or driver won't work)
+    return 1;
 }
 
 /* Record number of completed objects and recalculate the limit. */
@@ -245,9 +428,26 @@ DDE_WEAK int eth_validate_addr(struct net_device * a) {
  *
  * Returns the bit number of the first set bit.
  */
-DDE_WEAK unsigned long find_first_bit(const unsigned long * a, unsigned long b) {
-	dde_printf("find_first_bit not implemented\n");
-	return 0;
+unsigned long find_first_bit(const unsigned long *addr, unsigned long size)
+{
+        const unsigned long *p = addr;
+        unsigned long result = 0;
+        unsigned long tmp;
+
+        while (size & ~(BITS_PER_LONG-1)) {
+                if ((tmp = *(p++)))
+                        goto found;
+                result += BITS_PER_LONG;
+                size -= BITS_PER_LONG;
+        }
+        if (!size)
+                return result;
+
+        tmp = (*p) & (~0UL >> (BITS_PER_LONG - size));
+        if (tmp == 0UL)         /* Are any bits set? */
+                return result + size;   /* Nope. */
+found:
+        return result + __ffs(tmp);
 }
 
 /**
@@ -300,8 +500,10 @@ DDE_WEAK void ioread16_rep(void * a, void * b, unsigned long c) {
  * look at pci_iomap().
  */
 DDE_WEAK void * ioremap_nocache(resource_size_t a, unsigned long b) {
-	dde_printf("ioremap_nocache not implemented\n");
-	return 0;
+    void *ucore_ioremap(uint32_t pa, uint32_t size);
+    void *ret = ucore_ioremap(a, b);
+    kprintf("ioremap %x %x to %x\n", (uint32_t)a, (uint32_t)b, (uint32_t)ret);
+    return ret;
 }
 
 /*
@@ -330,9 +532,9 @@ DDE_WEAK void kfree(const void * a) {
 
 /*
  */
-DDE_WEAK void * __kmalloc(size_t a, gfp_t b) {
-	dde_printf("__kmalloc not implemented\n");
-	return 0;
+void * __kmalloc(size_t a, gfp_t b) {
+    void *ret = ucore_kmalloc(a);
+	return ret;
 }
 
 /*
@@ -371,7 +573,7 @@ DDE_WEAK ssize_t __modver_version_show(struct module_attribute * a, struct modul
 /*
  */
 DDE_WEAK void msleep(unsigned int a) {
-	dde_printf("msleep not implemented\n");
+	//FIXME dde_printf("msleep not implemented\n");
 }
 
 /*
@@ -384,7 +586,7 @@ DDE_WEAK unsigned long msleep_interruptible(unsigned int a) {
 /*
  */
 DDE_WEAK void __mutex_init(struct mutex * a, const char * b, struct lock_class_key * c) {
-	dde_printf("__mutex_init not implemented\n");
+	// FIXME dde_printf("__mutex_init not implemented\n");
 }
 
 /*
@@ -434,9 +636,14 @@ DDE_WEAK int netdev_err(const struct net_device * a, const char * b, ...) {
 
 /*
  */
-DDE_WEAK int netdev_info(const struct net_device * a, const char * b, ...) {
-	dde_printf("netdev_info not implemented\n");
-	return 0;
+DDE_WEAK int netdev_info(const struct net_device * a, const char * fmt, ...) {
+    kprintf("netdev_info: ");
+	va_list ap;
+	int cnt;
+	va_start(ap, fmt);
+	cnt = vkprintf(fmt, ap);
+	va_end(ap);
+	return cnt;
 }
 
 /*
@@ -448,13 +655,11 @@ DDE_WEAK int netdev_warn(const struct net_device * a, const char * b, ...) {
 
 /*
  */
-DDE_WEAK void netif_carrier_off(struct net_device * a) {
-	dde_printf("netif_carrier_off not implemented\n");
+DDE_WEAK void netif_carrier_on(struct net_device * a) {
+	dde_printf("netif_carrier_on not implemented\n");
 }
 
-/*
- */
-DDE_WEAK void netif_carrier_on(struct net_device * a) {
+DDE_WEAK void netif_carrier_off(struct net_device *dev) {
 	dde_printf("netif_carrier_on not implemented\n");
 }
 
@@ -497,13 +702,6 @@ struct kernel_param_ops param_ops_uint;
 
 /*
  */
-DDE_WEAK int pci_bus_read_config_word(struct pci_bus * a, unsigned int b, int c, u16 * d) {
-	dde_printf("pci_bus_read_config_word not implemented\n");
-	return 0;
-}
-
-/*
- */
 DDE_WEAK void pci_clear_mwi(struct pci_dev * a) {
 	dde_printf("pci_clear_mwi not implemented\n");
 }
@@ -512,13 +710,6 @@ DDE_WEAK void pci_clear_mwi(struct pci_dev * a) {
  */
 DDE_WEAK void pci_disable_device(struct pci_dev * a) {
 	dde_printf("pci_disable_device not implemented\n");
-}
-
-/*
- */
-DDE_WEAK int pci_enable_device(struct pci_dev * a) {
-	dde_printf("pci_enable_device not implemented\n");
-	return 0;
 }
 
 /*
@@ -532,13 +723,6 @@ DDE_WEAK int pci_enable_device_mem(struct pci_dev * a) {
  */
 DDE_WEAK int __pci_enable_wake(struct pci_dev * a, pci_power_t b, bool c, bool d) {
 	dde_printf("__pci_enable_wake not implemented\n");
-	return 0;
-}
-
-/*
- */
-DDE_WEAK void * pci_ioremap_bar(struct pci_dev * a, int b) {
-	dde_printf("pci_ioremap_bar not implemented\n");
 	return 0;
 }
 
@@ -582,9 +766,12 @@ DDE_WEAK int pci_save_state(struct pci_dev * a) {
 
 /*
  */
-DDE_WEAK int pci_select_bars(struct pci_dev * a, unsigned long b) {
-	dde_printf("pci_select_bars not implemented\n");
-	return 0;
+DDE_WEAK int pci_select_bars(struct pci_dev * dev, unsigned long flags) {
+    int i, bars = 0;
+    for (i = 0; i < PCI_NUM_RESOURCES; i++)
+        if (pci_resource_flags(dev, i) & flags)
+            bars |= (1 << i);
+    return bars;
 }
 
 /*
@@ -697,20 +884,20 @@ DDE_WEAK bool queue_work_on(int a, struct workqueue_struct * b, struct work_stru
 /*
  */
 DDE_WEAK void _raw_spin_lock(raw_spinlock_t * a) {
-	dde_printf("_raw_spin_lock not implemented\n");
+    // FIXME dde_printf("_raw_spin_lock not implemented\n");
 }
 
 /*
  */
 DDE_WEAK unsigned long _raw_spin_lock_irqsave(raw_spinlock_t * a) {
-	dde_printf("_raw_spin_lock_irqsave not implemented\n");
+	// FIXME dde_printf("_raw_spin_lock_irqsave not implemented\n");
 	return 0;
 }
 
 /*
  */
 DDE_WEAK void _raw_spin_unlock_irqrestore(raw_spinlock_t * a, unsigned long b) {
-	dde_printf("_raw_spin_unlock_irqrestore not implemented\n");
+	// FIXME dde_printf("_raw_spin_unlock_irqrestore not implemented\n");
 }
 
 /*
@@ -808,7 +995,14 @@ struct workqueue_struct * system_wq;
 /*
  */
 DDE_WEAK void __udelay(unsigned long a) {
-	dde_printf("__udelay not implemented\n");
+    // Assume we have CPU with 1GHz = 10^9 Hz
+    // 1s = 10^9 ns
+    // we loop for a times
+    volatile int b = a;
+    if (b <= 0)
+        return;
+    while(b--);
+    return;
 }
 
 /*
@@ -825,9 +1019,8 @@ DDE_WEAK void vfree(const void * a) {
 
 /*
  */
-DDE_WEAK void * vzalloc(unsigned long a) {
-	dde_printf("vzalloc not implemented\n");
-	return 0;
+void * vzalloc(unsigned long a) {
+    return ucore_kmalloc(a);
 }
 
 /*

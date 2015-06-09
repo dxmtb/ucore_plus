@@ -272,6 +272,11 @@ struct pci_ops {
 	int (*write)(struct pci_bus *bus, unsigned int devfn, int where, int size, u32 val);
 };
 
+struct pci_bus_region {
+	resource_size_t start;
+	resource_size_t end;
+};
+
 struct pci_dynids {
 	spinlock_t lock;            /* protects list, index */
 	struct list_head list;      /* for IDs added at runtime */
@@ -374,9 +379,31 @@ int pci_bus_write_config_word(struct pci_bus *bus, unsigned int devfn,
 int pci_bus_write_config_dword(struct pci_bus *bus, unsigned int devfn,
 			       int where, u32 val);
 
+static inline int pci_read_config_byte(const struct pci_dev *dev, int where, u8 *val)
+{
+        return pci_bus_read_config_byte(dev->bus, dev->devfn, where, val);
+}
 static inline int pci_read_config_word(const struct pci_dev *dev, int where, u16 *val)
 {
-	return pci_bus_read_config_word(dev->bus, dev->devfn, where, val);
+        return pci_bus_read_config_word(dev->bus, dev->devfn, where, val);
+}
+static inline int pci_read_config_dword(const struct pci_dev *dev, int where,
+                                        u32 *val)
+{
+        return pci_bus_read_config_dword(dev->bus, dev->devfn, where, val);
+}
+static inline int pci_write_config_byte(const struct pci_dev *dev, int where, u8 val)
+{
+        return pci_bus_write_config_byte(dev->bus, dev->devfn, where, val);
+}
+static inline int pci_write_config_word(const struct pci_dev *dev, int where, u16 val)
+{
+        return pci_bus_write_config_word(dev->bus, dev->devfn, where, val);
+}
+static inline int pci_write_config_dword(const struct pci_dev *dev, int where,
+                                         u32 val)
+{
+        return pci_bus_write_config_dword(dev->bus, dev->devfn, where, val);
 }
 
 int pcie_capability_clear_and_set_word(struct pci_dev *dev, int pos,

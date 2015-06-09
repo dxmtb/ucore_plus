@@ -993,6 +993,7 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	err = -EIO;
 	hw->hw_addr = pci_ioremap_bar(pdev, BAR_0);
+    kprintf("hw_addr %x\n", hw->hw_addr);
 	if (!hw->hw_addr)
 		goto err_ioremap;
 
@@ -1237,6 +1238,7 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	e_info(probe, "Intel(R) PRO/1000 Network Connection\n");
 
 	cards_found++;
+    kprintf("e1000_probe done netdev %x\n", netdev);
 	return 0;
 
 err_register:

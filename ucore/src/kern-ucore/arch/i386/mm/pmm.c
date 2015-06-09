@@ -454,15 +454,22 @@ void tlb_invalidate(pde_t * pgdir, uintptr_t la)
 	}
 }
 
+void *ucore_ioremap(uintptr_t pa, size_t size)
+{
+    return ioremap(pa, size);
+}
+
 // map physical addr to some va
 void *ioremap(uintptr_t pa, size_t size)
 {
     static uintptr_t base = KERNTOP;
 	size_t map_size = ROUNDUP(size, PGSIZE);
+    kprintf("base %x map_size %x\n", base, map_size);
 	if (base + map_size > VPT) {
 		panic("ioremap: overflow on MMIO map region");
 	}
 	uintptr_t va = base + PGOFF(pa);
+    kprintf("va %x\n", va);
 
 	// Map region. va and pa page aligned. map_size multiple of size.
 	boot_map_segment(boot_pgdir, va, map_size, pa, PTE_W);
@@ -470,6 +477,8 @@ void *ioremap(uintptr_t pa, size_t size)
 
 	// Update base
 	base += map_size;
+    kprintf("new base %x\n", base);
+    kprintf("ret %x\n", base - map_size);
 
 	// Return base of mapped region
 	return (void *) (base - map_size);
