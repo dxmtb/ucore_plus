@@ -629,14 +629,19 @@ DDE_WEAK struct sk_buff * __netdev_alloc_skb(struct net_device * a, unsigned int
 
 /*
  */
-DDE_WEAK int netdev_err(const struct net_device * a, const char * b, ...) {
-	dde_printf("netdev_err not implemented\n");
-	return 0;
+int netdev_err(const struct net_device * a, const char * fmt, ...) {
+    kprintf("netdev_err: ");
+	va_list ap;
+	int cnt;
+	va_start(ap, fmt);
+	cnt = vkprintf(fmt, ap);
+	va_end(ap);
+	return cnt;
 }
 
 /*
  */
-DDE_WEAK int netdev_info(const struct net_device * a, const char * fmt, ...) {
+int netdev_info(const struct net_device * a, const char * fmt, ...) {
     kprintf("netdev_info: ");
 	va_list ap;
 	int cnt;
@@ -907,11 +912,12 @@ DDE_WEAK int register_netdev(struct net_device * a) {
 	return 0;
 }
 
-/*
- */
-DDE_WEAK int request_threaded_irq(unsigned int a, irq_handler_t b, irq_handler_t c, unsigned long d, const char * e, void * f) {
+int request_threaded_irq(unsigned int irq, irq_handler_t handler,
+                         irq_handler_t thread_fn, unsigned long irqflags,
+                         const char *devname, void *dev_id) {
 	dde_printf("request_threaded_irq not implemented\n");
-	return 0;
+    kprintf("irq %d devname %s dev_id %x\n", irq, devname, dev_id);
+    return 0;
 }
 
 /*

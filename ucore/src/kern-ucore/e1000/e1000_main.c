@@ -1410,7 +1410,7 @@ static int e1000_open(struct net_device *netdev)
 	/* From here on the code is the same as e1000_up() */
 	clear_bit(__E1000_DOWN, &adapter->flags);
 
-	napi_enable(&adapter->napi);
+	//napi_enable(&adapter->napi);
 
 	e1000_irq_enable(adapter);
 
@@ -1614,6 +1614,7 @@ static void e1000_configure_tx(struct e1000_adapter *adapter)
 		ew32(TDLEN, tdlen);
 		ew32(TDBAH, (tdba >> 32));
 		ew32(TDBAL, (tdba & 0x00000000ffffffffULL));
+        kprintf("tbda %x\n", tdba);
 		ew32(TDT, 0);
 		ew32(TDH, 0);
 		adapter->tx_ring[0].tdh = ((hw->mac_type >= e1000_82543) ?
@@ -3104,6 +3105,46 @@ static int e1000_maybe_stop_tx(struct net_device *netdev,
 	if (likely(E1000_DESC_UNUSED(tx_ring) >= size))
 		return 0;
 	return __e1000_maybe_stop_tx(netdev, size);
+}
+
+static void e1000_dump(struct e1000_adapter *adapter);
+void e1000_xmit_buf(void *buf, unsigned int buf_size, struct net_device *netdev) {
+	struct e1000_tx_ring *tx_ring;
+    int i;
+	struct e1000_adapter *adapter = netdev_priv(netdev);
+	struct e1000_hw *hw = &adapter->hw;
+	u32 txd_upper = 0, txd_lower = E1000_TXD_CMD_IFCS;
+	tx_ring = adapter->tx_ring;
+    i = tx_ring->next_to_use;
+    struct e1000_tx_desc *tx_desc = E1000_TX_DESC(*tx_ring, i);
+
+    if (tx_desc->upper.fields.status & 0x1) {
+        kprintf("tx ring is full!!\n");
+        return ;
+    }
+
+    tx_desc->lower.data = 0;
+    tx_desc->lower.flags.cmd = 0x08 | 0x01;
+    tx_desc->lower.flags.length = (unsigned short)buf_size;
+    tx_desc->upper.fields.status &= ~(0x01);
+
+    tx_desc->buffer_addr = (unsigned long long)(buf-0xC0000000);
+
+    //tx_desc->lower.data = cpu_to_le32(txd_lower | buf_size);
+    //tx_desc->upper.data = cpu_to_le32(txd_upper);
+	//tx_desc->lower.data |= cpu_to_le32(adapter->txd_cmd);
+
+	/* Force memory writes to complete before letting h/w
+	 * know there are new descriptors to fetch.  (Only
+	 * applicable for weak-ordered memory model archs,
+	 * such as IA-64).
+	 */
+    if (++i == tx_ring->count) i = 0;
+	tx_ring->next_to_use = i;
+
+	writel(i, hw->hw_addr + tx_ring->tdt);
+
+    e1000_dump(adapter);
 }
 
 #define TXD_USE_COUNT(S, X) (((S) >> (X)) + 1 )
