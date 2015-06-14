@@ -1039,3 +1039,8 @@ DDE_WEAK void warn_slowpath_null(const char * a, const int b) {
  */
 struct device x86_dma_fallback_dev;
 
+void *ucore_dma_alloc_coherent(void *dev, size_t size, uint32_t *dma_handle, gfp_t gfp) {
+    void *ret = ucore_kmalloc(size);
+    *dma_handle = ret - 0xC0000000;
+    return ret;
+}

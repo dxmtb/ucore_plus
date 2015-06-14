@@ -57,6 +57,7 @@ static inline unsigned long dma_alloc_coherent_mask(struct device *dev,
 
 static inline gfp_t dma_alloc_coherent_gfp_flags(struct device *dev, gfp_t gfp)
 {
+  kprintf("not implement!!!\n");
 	unsigned long dma_mask = dma_alloc_coherent_mask(dev, gfp);
 
 	if (dma_mask <= DMA_BIT_MASK(24))
@@ -68,7 +69,7 @@ static inline gfp_t dma_alloc_coherent_gfp_flags(struct device *dev, gfp_t gfp)
        return gfp;
 }
 
-#define dma_alloc_coherent(d,s,h,f)	dma_alloc_attrs(d,s,h,f,NULL)
+#define dma_alloc_coherent(d,s,h,f)	ucore_dma_alloc_coherent(d,s,h,f)
 
 static inline void *
 dma_alloc_attrs(struct device *dev, size_t size, dma_addr_t *dma_handle,
