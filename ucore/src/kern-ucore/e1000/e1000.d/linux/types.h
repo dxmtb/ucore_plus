@@ -52,7 +52,7 @@ typedef unsigned long blkcnt_t;
 #define pgoff_t unsigned long
 #endif
 
-typedef u64 dma_addr_t;
+typedef u32 dma_addr_t;
 
 typedef unsigned __bitwise__ gfp_t;
 typedef unsigned __bitwise__ fmode_t;

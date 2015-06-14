@@ -69,12 +69,14 @@ static inline gfp_t dma_alloc_coherent_gfp_flags(struct device *dev, gfp_t gfp)
        return gfp;
 }
 
-#define dma_alloc_coherent(d,s,h,f)	ucore_dma_alloc_coherent(d,s,h,f)
+#define dma_alloc_coherent(d,s,h,f)	dma_alloc_attrs(d,s,h,f,0)
 
 static inline void *
 dma_alloc_attrs(struct device *dev, size_t size, dma_addr_t *dma_handle,
 		gfp_t gfp, struct dma_attrs *attrs)
 {
+  void *ucore_dma_alloc_coherent(void *dev, size_t size, uint32_t *dma_handle, gfp_t gfp);
+  return ucore_dma_alloc_coherent(dev, size, (uint32_t *)dma_handle, 0);
 	struct dma_map_ops *ops = get_dma_ops(dev);
 	void *memory;
 

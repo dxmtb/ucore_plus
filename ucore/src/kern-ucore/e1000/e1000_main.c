@@ -127,7 +127,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter,
                                 struct e1000_rx_ring *rx_ring);
 static void e1000_set_rx_mode(struct net_device *netdev);
 static void e1000_update_phy_info_task(struct work_struct *work);
-static void e1000_watchdog(struct work_struct *work);
+static void e1000_watchdog(struct e1000_adapter *work);
 static void e1000_82547_tx_fifo_stall_task(struct work_struct *work);
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev);
@@ -956,6 +956,7 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	need_ioport = e1000_is_need_ioport(pdev);
 	if (need_ioport) {
 		bars = pci_select_bars(pdev, IORESOURCE_MEM | IORESOURCE_IO);
+        kprintf("bars %x\n", bars);
 		err = pci_enable_device(pdev);
 	} else {
 		bars = pci_select_bars(pdev, IORESOURCE_MEM);
@@ -1127,7 +1128,7 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		e_err(probe, "Invalid MAC Address\n");
 
 
-	INIT_DELAYED_WORK(&adapter->watchdog_task, e1000_watchdog);
+	//INIT_DELAYED_WORK(&adapter->watchdog_task, e1000_watchdog);
 	INIT_DELAYED_WORK(&adapter->fifo_stall_task,
 			  e1000_82547_tx_fifo_stall_task);
 	INIT_DELAYED_WORK(&adapter->phy_info_task, e1000_update_phy_info_task);
@@ -1419,6 +1420,10 @@ static int e1000_open(struct net_device *netdev)
 	/* fire a link status change interrupt to start the watchdog */
 	ew32(ICS, E1000_ICS_LSC);
 
+    u32 tctl = er32(TCTL);
+    tctl |= E1000_TCTL_EN;
+    ew32(TCTL, tctl);
+
 	return E1000_SUCCESS;
 
 err_req_irq:
@@ -1519,6 +1524,7 @@ static int e1000_setup_tx_resources(struct e1000_adapter *adapter,
 
 	txdr->desc = dma_alloc_coherent(&pdev->dev, txdr->size, &txdr->dma,
 					GFP_KERNEL);
+    kprintf("tx dma %x virtual %x\n", txdr->dma, txdr->desc);
 	if (!txdr->desc) {
 setup_tx_desc_die:
 		vfree(txdr->buffer_info);
@@ -2420,11 +2426,11 @@ bool e1000_has_link(struct e1000_adapter *adapter)
  * e1000_watchdog - work function
  * @work: work struct contained inside adapter struct
  **/
-static void e1000_watchdog(struct work_struct *work)
+static void e1000_watchdog(struct e1000_adapter *adapter)
 {
-	struct e1000_adapter *adapter = container_of(work,
-						     struct e1000_adapter,
-						     watchdog_task.work);
+//	struct e1000_adapter *adapter = container_of(work,
+//						     struct e1000_adapter,
+//						     watchdog_task.work);
 	struct e1000_hw *hw = &adapter->hw;
 	struct net_device *netdev = adapter->netdev;
 	struct e1000_tx_ring *txdr = adapter->tx_ring;
@@ -3118,6 +3124,7 @@ void e1000_xmit_buf(void *buf, unsigned int buf_size, struct net_device *netdev)
     i = tx_ring->next_to_use;
     struct e1000_tx_desc *tx_desc = E1000_TX_DESC(*tx_ring, i);
 
+
     if (tx_desc->upper.fields.status & 0x1) {
         kprintf("tx ring is full!!\n");
         return ;
@@ -3317,6 +3324,7 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		tx_ring->next_to_use = first;
 	}
 
+    //e1000_dump(adapter);
 	return NETDEV_TX_OK;
 }
 

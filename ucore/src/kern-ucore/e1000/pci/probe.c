@@ -290,6 +290,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		}
 	} else {
 		sz = pci_size(l, sz, mask);
+        kprintf("pci_size %x\n", sz);
 
 		if (!sz)
 			goto fail;

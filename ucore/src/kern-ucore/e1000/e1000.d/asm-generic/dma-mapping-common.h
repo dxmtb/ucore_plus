@@ -7,11 +7,15 @@
 #include <linux/dma-debug.h>
 #include <linux/dma-attrs.h>
 
+void *ucore_dma_alloc_coherent(void *dev, size_t size, uint32_t *dma_handle, gfp_t gfp);
 static inline dma_addr_t dma_map_single_attrs(struct device *dev, void *ptr,
 					      size_t size,
 					      enum dma_data_direction dir,
 					      struct dma_attrs *attrs)
 {
+  kprintf("dma_map_single_attrs %x size %x\n", ptr, size);
+  // return physical addr
+  return ptr - 0xC0000000;
 	struct dma_map_ops *ops = get_dma_ops(dev);
 	dma_addr_t addr;
 

@@ -198,17 +198,40 @@ free_p:
 }
 void ether_setup(struct net_device *dev)
 {
+//enum net_device_flags {
+//IFF_UP                          = 1<<0,  /* sysfs */
+//IFF_BROADCAST                   = 1<<1,  /* volatile */
+//IFF_DEBUG                       = 1<<2,  /* sysfs */
+//IFF_LOOPBACK                    = 1<<3,  /* volatile */
+//IFF_POINTOPOINT                 = 1<<4,  /* volatile */
+//IFF_NOTRAILERS                  = 1<<5,  /* sysfs */
+//IFF_RUNNING                     = 1<<6,  /* volatile */
+//IFF_NOARP                       = 1<<7,  /* sysfs */
+//IFF_PROMISC                     = 1<<8,  /* sysfs */
+//IFF_ALLMULTI                    = 1<<9,  /* sysfs */
+//IFF_MASTER                      = 1<<10, /* volatile */
+//IFF_SLAVE                       = 1<<11, /* volatile */
+//IFF_MULTICAST                   = 1<<12, /* sysfs */
+//IFF_PORTSEL                     = 1<<13, /* sysfs */
+//IFF_AUTOMEDIA                   = 1<<14, /* sysfs */
+//IFF_DYNAMIC                     = 1<<15, /* sysfs */
+//IFF_LOWER_UP                    = 1<<16, /* volatile */
+//IFF_DORMANT                     = 1<<17, /* volatile */
+//IFF_ECHO                        = 1<<18, /* volatile */
+//};
+    #define ARPHRD_ETHER    1
         //dev->header_ops         = &eth_header_ops;
-        //dev->type               = ARPHRD_ETHER;
+        dev->header_ops         = 0;
+        dev->type               = ARPHRD_ETHER;
         dev->hard_header_len    = ETH_HLEN;
         dev->mtu                = ETH_DATA_LEN;
         dev->addr_len           = ETH_ALEN;
         dev->tx_queue_len       = 1000; /* Ethernet wants good queues */
         //dev->flags              = IFF_BROADCAST|IFF_MULTICAST;
-        //dev->priv_flags         |= IFF_TX_SKB_SHARING;
+        dev->flags              = (1<<1)|(1<<12);
+        dev->priv_flags         |= (1<<16);
 
         memset(dev->broadcast, 0xFF, ETH_ALEN);
-
 }
 /*
  */
@@ -303,9 +326,13 @@ DDE_WEAK int device_set_wakeup_enable(struct device * a, bool b) {
 
 /*
  */
-DDE_WEAK int _dev_info(const struct device * a, const char * b, ...) {
-	dde_printf("_dev_info not implemented\n");
-	return 0;
+DDE_WEAK int _dev_info(const struct device * a, const char * fmt, ...) {
+	va_list ap;
+	int cnt;
+	va_start(ap, fmt);
+	cnt = vkprintf(fmt, ap);
+	va_end(ap);
+	return cnt;
 }
 
 /* Use this variant in places where it could be invoked
@@ -771,7 +798,7 @@ DDE_WEAK int pci_save_state(struct pci_dev * a) {
 
 /*
  */
-DDE_WEAK int pci_select_bars(struct pci_dev * dev, unsigned long flags) {
+int pci_select_bars(struct pci_dev * dev, unsigned long flags) {
     int i, bars = 0;
     for (i = 0; i < PCI_NUM_RESOURCES; i++)
         if (pci_resource_flags(dev, i) & flags)
@@ -781,8 +808,16 @@ DDE_WEAK int pci_select_bars(struct pci_dev * dev, unsigned long flags) {
 
 /*
  */
-DDE_WEAK void pci_set_master(struct pci_dev * a) {
-	dde_printf("pci_set_master not implemented\n");
+void pci_set_master(struct pci_dev * dev) {
+    u16 old_cmd, cmd;
+
+    pci_read_config_word(dev, PCI_COMMAND, &old_cmd);
+    cmd = old_cmd | PCI_COMMAND_MASTER;
+    if (cmd != old_cmd) {
+        kprintf("enabling bus mastering\n");
+        pci_write_config_word(dev, PCI_COMMAND, cmd);
+    }
+    dev->is_busmaster = 1;
 }
 
 /*
@@ -1042,5 +1077,6 @@ struct device x86_dma_fallback_dev;
 void *ucore_dma_alloc_coherent(void *dev, size_t size, uint32_t *dma_handle, gfp_t gfp) {
     void *ret = ucore_kmalloc(size);
     *dma_handle = ret - 0xC0000000;
+    kprintf("alloc dma handle %x saved to %x virtual %x\n", *dma_handle, dma_handle, ret);
     return ret;
 }

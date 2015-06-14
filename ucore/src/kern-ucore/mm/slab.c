@@ -419,7 +419,9 @@ void *kmalloc(size_t size)
 }
 
 void *ucore_kmalloc(size_t size) {
-    return kmalloc(size);
+    void *ret = kmalloc(size);
+    memset(ret, 0, size);
+    return ret;
 }
 
 static void kmem_cache_free(kmem_cache_t * cachep, void *obj);

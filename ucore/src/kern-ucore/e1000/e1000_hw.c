@@ -4376,8 +4376,12 @@ s32 e1000_read_mac_addr(struct e1000_hw *hw)
 		break;
 	}
 
-	for (i = 0; i < NODE_ADDRESS_SIZE; i++)
+    kprintf("MacAddress");
+	for (i = 0; i < NODE_ADDRESS_SIZE; i++) {
 		hw->mac_addr[i] = hw->perm_mac_addr[i];
+        kprintf(":%x", hw->mac_addr[i]);
+    }
+    kprintf("\n");
 	return E1000_SUCCESS;
 }
 
@@ -5043,8 +5047,12 @@ void e1000_get_bus_info(struct e1000_hw *hw)
 		break;
 	default:
 		status = er32(STATUS);
-		hw->bus_type = (status & E1000_STATUS_PCIX_MODE) ?
-		    e1000_bus_type_pcix : e1000_bus_type_pci;
+		//hw->bus_type = (status & E1000_STATUS_PCIX_MODE) ?
+		//    e1000_bus_type_pcix : e1000_bus_type_pci;
+		if (status & E1000_STATUS_PCIX_MODE) {
+            kprintf("Force E1000 to PCI mode\n");
+        }
+        hw->bus_type = e1000_bus_type_pci;
 
 		if (hw->device_id == E1000_DEV_ID_82546EB_QUAD_COPPER) {
 			hw->bus_speed = (hw->bus_type == e1000_bus_type_pci) ?

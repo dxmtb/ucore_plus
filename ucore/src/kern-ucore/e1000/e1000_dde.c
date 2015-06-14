@@ -30,6 +30,7 @@ struct sk_buff *alloc_skb_from_buf(void *buf, int buf_size) {
     struct skb_shared_info *shinfo;
     struct sk_buff *skb;
     u8 *data;
+    int new_buf_size = max(buf_size, 60);
 
     /* Get the HEAD */
     skb = ucore_kmalloc(sizeof(struct sk_buff));
@@ -41,7 +42,7 @@ struct sk_buff *alloc_skb_from_buf(void *buf, int buf_size) {
      * aligned memory blocks, unless SLUB/SLAB debug is enabled.
      * Both skb->head and skb_shared_info are cache line aligned.
      */
-    size = buf_size + sizeof(struct skb_shared_info);
+    size = new_buf_size + sizeof(struct skb_shared_info);
     data = ucore_kmalloc(size);
     if (!data)
         goto nodata;
@@ -55,10 +56,9 @@ struct sk_buff *alloc_skb_from_buf(void *buf, int buf_size) {
     /* Account for allocated memory : skb + skb->head */
     skb->truesize = size;
     skb->pfmemalloc = 0; // FIXME: what value?
-    skb->head = data;
-    skb->data = data;
-    skb_reset_tail_pointer(skb);
-    skb->end = skb->tail + size;
+    skb->len = new_buf_size;
+    skb->head = skb->data = data;
+    skb->tail = skb->end = new_buf_size;
     skb->mac_header = ~0U;
     skb->transport_header = ~0U;
 
@@ -67,7 +67,7 @@ struct sk_buff *alloc_skb_from_buf(void *buf, int buf_size) {
     memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
 
     // put buf into skb
-    __skb_push(skb, buf_size);
+    memset(skb->data, 0, new_buf_size);
     memcpy(skb->data, buf, buf_size);
 
 out:
@@ -82,19 +82,21 @@ void e1000_xmit_buf(void *buf, unsigned int buf_size, struct net_device *netdev)
 
 void test_transmission() {
     kprintf("Testing transmission...\n");
-	uint32_t data[50];
-	int i;
+	uint8_t data[50];
+	int i, j;
 
 	for (i = 0; i < 50; i++) {
 		data[i] = i;
 	}
 
 	for (i = 0; i < 18; i++) {
-        //struct sk_buff *skb;
-        //skb = alloc_skb_from_buf(data, 50);
-        //netdev->netdev_ops->ndo_start_xmit(skb, netdev);
-        e1000_xmit_buf(data, 50, netdev);
-        while(1);
+        kprintf("buf %x size %x\n", data, 50);
+        struct sk_buff *skb;
+        skb = alloc_skb_from_buf(data, 50);
+        netdev->netdev_ops->ndo_start_xmit(skb, netdev);
+        for (j = 0; j < 50; j++)
+            data[j] += 50;
+        //e1000_xmit_buf(data, 50, netdev);
 	}
 }
 

@@ -199,9 +199,13 @@ static void trap_dispatch(struct trapframe *tf)
 		dev_stdin_write(c);
         lapiceoi();
 		break;
+    case IRQ_OFFSET + IRQ_E1000:
+        kprintf("irq for E1000!!\n");
+        break;
 	case IRQ_OFFSET + IRQ_IDE1:
 	case IRQ_OFFSET + IRQ_IDE2:
 		/* do nothing */
+        panic("unexpected IRQ_IDE\n");
 		break;
 	default:
 		print_trapframe(tf);
