@@ -108,7 +108,7 @@ static void e1000_free_rx_resources(struct e1000_adapter *adapter,
                              struct e1000_rx_ring *rx_ring);
 void e1000_update_stats(struct e1000_adapter *adapter);
 
-int e1000_init_module(void);
+static int e1000_init_module(void);
 static void e1000_exit_module(void);
 int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 static void e1000_remove(struct pci_dev *pdev);
@@ -127,7 +127,7 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter,
                                 struct e1000_rx_ring *rx_ring);
 static void e1000_set_rx_mode(struct net_device *netdev);
 static void e1000_update_phy_info_task(struct work_struct *work);
-static void e1000_watchdog(struct e1000_adapter *work);
+static void e1000_watchdog(struct work_struct *work);
 static void e1000_82547_tx_fifo_stall_task(struct work_struct *work);
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev);
@@ -241,7 +241,7 @@ struct net_device *e1000_get_hw_dev(struct e1000_hw *hw)
  * e1000_init_module is the first routine called when the driver is
  * loaded. All it does is register with the PCI subsystem.
  **/
-int e1000_init_module(void)
+static int __init e1000_init_module(void)
 {
 	int ret;
 	pr_info("%s - version %s\n", e1000_driver_string, e1000_driver_version);
@@ -956,7 +956,6 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	need_ioport = e1000_is_need_ioport(pdev);
 	if (need_ioport) {
 		bars = pci_select_bars(pdev, IORESOURCE_MEM | IORESOURCE_IO);
-        kprintf("bars %x\n", bars);
 		err = pci_enable_device(pdev);
 	} else {
 		bars = pci_select_bars(pdev, IORESOURCE_MEM);
@@ -1128,7 +1127,7 @@ int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 		e_err(probe, "Invalid MAC Address\n");
 
 
-	//INIT_DELAYED_WORK(&adapter->watchdog_task, e1000_watchdog);
+	INIT_DELAYED_WORK(&adapter->watchdog_task, e1000_watchdog);
 	INIT_DELAYED_WORK(&adapter->fifo_stall_task,
 			  e1000_82547_tx_fifo_stall_task);
 	INIT_DELAYED_WORK(&adapter->phy_info_task, e1000_update_phy_info_task);
@@ -1423,6 +1422,10 @@ static int e1000_open(struct net_device *netdev)
     u32 tctl = er32(TCTL);
     tctl |= E1000_TCTL_EN;
     ew32(TCTL, tctl);
+
+	u32 rctl = er32(RCTL);
+    rctl |= E1000_RCTL_EN;
+	ew32(RCTL, rctl);
 
 	return E1000_SUCCESS;
 
@@ -2426,11 +2429,11 @@ bool e1000_has_link(struct e1000_adapter *adapter)
  * e1000_watchdog - work function
  * @work: work struct contained inside adapter struct
  **/
-static void e1000_watchdog(struct e1000_adapter *adapter)
+static void e1000_watchdog(struct work_struct *work)
 {
-//	struct e1000_adapter *adapter = container_of(work,
-//						     struct e1000_adapter,
-//						     watchdog_task.work);
+	struct e1000_adapter *adapter = container_of(work,
+						     struct e1000_adapter,
+						     watchdog_task.work);
 	struct e1000_hw *hw = &adapter->hw;
 	struct net_device *netdev = adapter->netdev;
 	struct e1000_tx_ring *txdr = adapter->tx_ring;
@@ -3113,47 +3116,6 @@ static int e1000_maybe_stop_tx(struct net_device *netdev,
 	return __e1000_maybe_stop_tx(netdev, size);
 }
 
-static void e1000_dump(struct e1000_adapter *adapter);
-void e1000_xmit_buf(void *buf, unsigned int buf_size, struct net_device *netdev) {
-	struct e1000_tx_ring *tx_ring;
-    int i;
-	struct e1000_adapter *adapter = netdev_priv(netdev);
-	struct e1000_hw *hw = &adapter->hw;
-	u32 txd_upper = 0, txd_lower = E1000_TXD_CMD_IFCS;
-	tx_ring = adapter->tx_ring;
-    i = tx_ring->next_to_use;
-    struct e1000_tx_desc *tx_desc = E1000_TX_DESC(*tx_ring, i);
-
-
-    if (tx_desc->upper.fields.status & 0x1) {
-        kprintf("tx ring is full!!\n");
-        return ;
-    }
-
-    tx_desc->lower.data = 0;
-    tx_desc->lower.flags.cmd = 0x08 | 0x01;
-    tx_desc->lower.flags.length = (unsigned short)buf_size;
-    tx_desc->upper.fields.status &= ~(0x01);
-
-    tx_desc->buffer_addr = (unsigned long long)(buf-0xC0000000);
-
-    //tx_desc->lower.data = cpu_to_le32(txd_lower | buf_size);
-    //tx_desc->upper.data = cpu_to_le32(txd_upper);
-	//tx_desc->lower.data |= cpu_to_le32(adapter->txd_cmd);
-
-	/* Force memory writes to complete before letting h/w
-	 * know there are new descriptors to fetch.  (Only
-	 * applicable for weak-ordered memory model archs,
-	 * such as IA-64).
-	 */
-    if (++i == tx_ring->count) i = 0;
-	tx_ring->next_to_use = i;
-
-	writel(i, hw->hw_addr + tx_ring->tdt);
-
-    e1000_dump(adapter);
-}
-
 #define TXD_USE_COUNT(S, X) (((S) >> (X)) + 1 )
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev)
@@ -3324,7 +3286,6 @@ static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 		tx_ring->next_to_use = first;
 	}
 
-    //e1000_dump(adapter);
 	return NETDEV_TX_OK;
 }
 
