@@ -233,7 +233,10 @@ void trap(struct trapframe *tf)
 		trap_dispatch(tf);
 
 		current->tf = otf;
-		if (!in_kernel) {
+		if (!in_kernel
+                || strcmp(current->name, "tcpip_thread")==0
+                || strcmp(current->name, "e1000-rx")==0
+                || strcmp(current->name, "http_server")==0) {
 			may_killed();
 			if (current->need_resched) {
 				schedule();

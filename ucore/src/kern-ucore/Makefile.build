@@ -21,8 +21,8 @@ export KTREE_OBJ_ROOT
 KERN_INCLUDES := . libs syscall debug driver mm numa sync schedule process fs \
                  fs/swap fs/vfs fs/pipe fs/sfs fs/devs module kmodule sysconf \
                  dde36 \
-				 e1000/e1000.d e1000/e1000.d/uapi
-				 #e1000/headers e1000/headers/uapi
+				 e1000/e1000.d e1000/e1000.d/uapi \
+				 lwip/include lwip/include/ipv4 lwip/include/ lwip/sys
 
 ifdef UCONFIG_HAVE_LINUX_DDE_BASE
 KERN_INCLUDES += module/include

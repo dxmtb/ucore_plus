@@ -68,8 +68,9 @@ int kern_init(void)
     ioapicenable(IRQ_COM1, 0);
 
     enable_e1000();
-    test_transmission();
+    //test_transmission();
 
+    init_lwip_dev();
 	/* do nothing */
 	cpu_idle();		// run idle process
 }

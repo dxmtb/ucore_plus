@@ -78,7 +78,12 @@ nodata:
     goto out;
 }
 
-void e1000_xmit_buf(void *buf, unsigned int buf_size, struct net_device *netdev);
+void
+transmit_packet(void *buf, size_t size) {
+    struct sk_buff *skb;
+    skb = alloc_skb_from_buf(buf, size);
+    netdev->netdev_ops->ndo_start_xmit(skb, netdev);
+}
 
 void test_transmission() {
     kprintf("Testing transmission...\n");
@@ -91,12 +96,9 @@ void test_transmission() {
 
 	for (i = 0; i < 18; i++) {
         kprintf("buf %x size %x\n", data, 50);
-        struct sk_buff *skb;
-        skb = alloc_skb_from_buf(data, 50);
-        netdev->netdev_ops->ndo_start_xmit(skb, netdev);
+        transmit_packet(data, 50);
         for (j = 0; j < 50; j++)
             data[j] += 50;
-        //e1000_xmit_buf(data, 50, netdev);
 	}
 }
 

@@ -628,6 +628,8 @@ DDE_WEAK void mutex_unlock(struct mutex * a) {
 	dde_printf("mutex_unlock not implemented\n");
 }
 
+void ethernetif_input_dde(void *data, int len);
+
 int netif_receive_skb_internal(struct sk_buff *skb) {
     kprintf("received skb %x data %x head %x tail %d end %d len %d\n", skb, \
             skb->data, skb->head, skb->tail, skb->end, skb->len);
@@ -635,6 +637,7 @@ int netif_receive_skb_internal(struct sk_buff *skb) {
     for (i = 0; i < skb->len; i++)
         cprintf("%x ", *((char*)(skb->data) + i) & 0xff);
     cprintf("\n");
+    ethernetif_input_dde(skb->data, skb->len);
 }
 
 static int napi_gro_complete(struct sk_buff *skb)

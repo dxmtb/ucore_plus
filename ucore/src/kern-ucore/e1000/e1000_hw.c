@@ -4382,6 +4382,8 @@ s32 e1000_read_mac_addr(struct e1000_hw *hw)
         kprintf(":%x", hw->mac_addr[i]);
     }
     kprintf("\n");
+    void set_mac_address(uint8_t *mac_addr);
+    set_mac_address(hw->mac_addr);
 	return E1000_SUCCESS;
 }
 
