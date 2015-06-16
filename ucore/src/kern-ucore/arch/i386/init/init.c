@@ -66,7 +66,9 @@ int kern_init(void)
 
     ioapicenable(IRQ_KBD, 0);
     ioapicenable(IRQ_COM1, 0);
-    ioapicenable(IRQ_E1000, 0);
+
+    enable_e1000();
+    test_transmission();
 
 	/* do nothing */
 	cpu_idle();		// run idle process

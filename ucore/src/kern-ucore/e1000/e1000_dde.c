@@ -100,12 +100,20 @@ void test_transmission() {
 	}
 }
 
+void enable_e1000() {
+    netdev->netdev_ops->ndo_open(netdev);
+}
+
+void e1000_intr_trap() {
+    kprintf("processing e1000 intr\n");
+    e1000_intr(11, netdev);
+    kprintf("processing e1000 intr done\n");
+}
+
 int e1000_dde_init(struct pci_func *pcif) {
     e1000_dev_init(pcif);
     e1000_probe(&e1000_dev, &ent);
     netdev = e1000_dev.dev.p;
     kprintf("netdev %x\n", netdev);
-    netdev->netdev_ops->ndo_open(netdev);
-    test_transmission();
     return 0;
 }

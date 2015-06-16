@@ -32,6 +32,8 @@ static inline struct dma_map_ops *get_dma_ops(struct device *dev)
 
 static inline int dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
+  // never error
+  return false;
 	struct dma_map_ops *ops = get_dma_ops(dev);
 	debug_dma_mapping_error(dev, dma_addr);
 	if (ops->mapping_error)

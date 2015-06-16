@@ -128,16 +128,17 @@ static void e1000_clean_rx_ring(struct e1000_adapter *adapter,
 static void e1000_set_rx_mode(struct net_device *netdev);
 static void e1000_update_phy_info_task(struct work_struct *work);
 static void e1000_watchdog(struct work_struct *work);
+//static void e1000_watchdog(struct e1000_adapter *adapter)
 static void e1000_82547_tx_fifo_stall_task(struct work_struct *work);
 static netdev_tx_t e1000_xmit_frame(struct sk_buff *skb,
 				    struct net_device *netdev);
 static struct net_device_stats * e1000_get_stats(struct net_device *netdev);
 static int e1000_change_mtu(struct net_device *netdev, int new_mtu);
 static int e1000_set_mac(struct net_device *netdev, void *p);
-static irqreturn_t e1000_intr(int irq, void *data);
+irqreturn_t e1000_intr(int irq, void *data);
 static bool e1000_clean_tx_irq(struct e1000_adapter *adapter,
 			       struct e1000_tx_ring *tx_ring);
-static int e1000_clean(struct napi_struct *napi, int budget);
+int e1000_clean(struct napi_struct *napi, int budget);
 static bool e1000_clean_rx_irq(struct e1000_adapter *adapter,
 			       struct e1000_rx_ring *rx_ring,
 			       int *work_done, int work_to_do);
@@ -1410,7 +1411,7 @@ static int e1000_open(struct net_device *netdev)
 	/* From here on the code is the same as e1000_up() */
 	clear_bit(__E1000_DOWN, &adapter->flags);
 
-	//napi_enable(&adapter->napi);
+	napi_enable(&adapter->napi);
 
 	e1000_irq_enable(adapter);
 
@@ -1424,8 +1425,8 @@ static int e1000_open(struct net_device *netdev)
     ew32(TCTL, tctl);
 
 	u32 rctl = er32(RCTL);
-    rctl |= E1000_RCTL_EN;
-	ew32(RCTL, rctl);
+    if (!(rctl & E1000_RCTL_EN))
+        kprintf("warning: rctl not enabled!!!\n");
 
 	return E1000_SUCCESS;
 
@@ -2430,11 +2431,12 @@ bool e1000_has_link(struct e1000_adapter *adapter)
  * @work: work struct contained inside adapter struct
  **/
 static void e1000_watchdog(struct work_struct *work)
+//static void e1000_watchdog(struct e1000_adapter *adapter)
 {
-	struct e1000_adapter *adapter = container_of(work,
-						     struct e1000_adapter,
-						     watchdog_task.work);
-	struct e1000_hw *hw = &adapter->hw;
+    struct e1000_adapter *adapter = container_of(work,
+            struct e1000_adapter,
+            watchdog_task.work);
+    struct e1000_hw *hw = &adapter->hw;
 	struct net_device *netdev = adapter->netdev;
 	struct e1000_tx_ring *txdr = adapter->tx_ring;
 	u32 link, tctl;
@@ -3766,7 +3768,7 @@ void e1000_update_stats(struct e1000_adapter *adapter)
  * @irq: interrupt number
  * @data: pointer to a network interface device structure
  **/
-static irqreturn_t e1000_intr(int irq, void *data)
+irqreturn_t e1000_intr(int irq, void *data)
 {
 	struct net_device *netdev = data;
 	struct e1000_adapter *adapter = netdev_priv(netdev);
@@ -3815,7 +3817,7 @@ static irqreturn_t e1000_intr(int irq, void *data)
  * e1000_clean - NAPI Rx polling callback
  * @adapter: board private structure
  **/
-static int e1000_clean(struct napi_struct *napi, int budget)
+int e1000_clean(struct napi_struct *napi, int budget)
 {
 	struct e1000_adapter *adapter = container_of(napi, struct e1000_adapter,
 						     napi);
@@ -3824,6 +3826,8 @@ static int e1000_clean(struct napi_struct *napi, int budget)
 	tx_clean_complete = e1000_clean_tx_irq(adapter, &adapter->tx_ring[0]);
 
 	adapter->clean_rx(adapter, &adapter->rx_ring[0], &work_done, budget);
+    kprintf("tx_clean_complete %d budget %d work_done %d\n", tx_clean_complete, \
+            budget, work_done);
 
 	if (!tx_clean_complete)
 		work_done = budget;
@@ -4010,6 +4014,9 @@ static void e1000_consume_page(struct e1000_buffer *bi, struct sk_buff *skb,
 static void e1000_receive_skb(struct e1000_adapter *adapter, u8 status,
 			      __le16 vlan, struct sk_buff *skb)
 {
+    int netif_receive_skb_internal(struct sk_buff *skb);
+    netif_receive_skb_internal(skb);
+    return ;
 	skb->protocol = eth_type_trans(skb, adapter->netdev);
 
 	if (status & E1000_RXD_STAT_VP) {

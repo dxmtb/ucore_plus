@@ -437,10 +437,10 @@ DDE_WEAK int ethtool_op_get_ts_info(struct net_device * a, struct ethtool_ts_inf
 /*
  */
 DDE_WEAK __be16 eth_type_trans(struct sk_buff * a, struct net_device * b) {
+    // since we don't need skb->protocol
 	dde_printf("eth_type_trans not implemented\n");
 	return 0;
 }
-
 /*
  */
 DDE_WEAK int eth_validate_addr(struct net_device * a) {
@@ -628,30 +628,209 @@ DDE_WEAK void mutex_unlock(struct mutex * a) {
 	dde_printf("mutex_unlock not implemented\n");
 }
 
-/*
- */
-DDE_WEAK void napi_complete(struct napi_struct * a) {
-	dde_printf("napi_complete not implemented\n");
+int netif_receive_skb_internal(struct sk_buff *skb) {
+    kprintf("received skb %x data %x head %x tail %d end %d len %d\n", skb, \
+            skb->data, skb->head, skb->tail, skb->end, skb->len);
+    int i;
+    for (i = 0; i < skb->len; i++)
+        cprintf("%x ", *((char*)(skb->data) + i) & 0xff);
+    cprintf("\n");
+}
+
+static int napi_gro_complete(struct sk_buff *skb)
+{
+        return netif_receive_skb_internal(skb);
+}
+
+void napi_gro_flush(struct napi_struct *napi, bool flush_old)
+{
+        struct sk_buff *skb, *prev = NULL;
+
+        /* scan list and build reverse chain */
+        for (skb = napi->gro_list; skb != NULL; skb = skb->next) {
+                skb->prev = prev;
+                prev = skb;
+        }
+
+        for (skb = prev; skb; skb = prev) {
+                skb->next = NULL;
+
+//                if (flush_old && NAPI_GRO_CB(skb)->age == jiffies)
+//                        return;
+
+                prev = skb->prev;
+                napi_gro_complete(skb);
+                napi->gro_count--;
+        }
+
+        napi->gro_list = NULL;
+}
+
+void __napi_complete(struct napi_struct *n)
+{
+        BUG_ON(!test_bit(NAPI_STATE_SCHED, &n->state));
+        BUG_ON(n->gro_list);
+
+        //list_del(&n->poll_list);
+        //smp_mb__before_atomic();
+        clear_bit(NAPI_STATE_SCHED, &n->state);
+}
+
+void napi_complete(struct napi_struct *n)
+{
+        unsigned long flags;
+
+        /*
+         * don't let napi dequeue from the cpu poll list
+         * just in case its running on a different cpu
+         */
+        if (unlikely(test_bit(NAPI_STATE_NPSVC, &n->state)))
+                return;
+
+        napi_gro_flush(n, false);
+        local_irq_save(flags);
+        __napi_complete(n);
+        local_irq_restore(flags);
 }
 
 /*
  */
-DDE_WEAK gro_result_t napi_gro_receive(struct napi_struct * a, struct sk_buff * b) {
-	dde_printf("napi_gro_receive not implemented\n");
-	return 0;
+void __napi_schedule(struct napi_struct *n) {
+//    struct softnet_data *sd = &__get_cpu_var(softnet_data);
+//    unsigned long time_limit = jiffies + 2;
+    int budget = 300;
+//    void *have;
+//
+//    local_irq_disable();
+//
+//    while (!list_empty(&sd->poll_list)) {
+//        struct napi_struct *n;
+        int work, weight;
+//
+//        /* If softirq window is exhuasted then punt.
+//         * Allow this to run for 2 jiffies since which will allow
+//         * an average latency of 1.5/HZ.
+//         */
+//        if (unlikely(budget <= 0 || time_after_eq(jiffies, time_limit)))
+//            goto softnet_break;
+//
+//        local_irq_enable();
+//
+//        /* Even though interrupts have been re-enabled, this
+//         * access is safe because interrupts can only add new
+//         * entries to the tail of this list, and only ->poll()
+//         * calls can remove this head entry from the list.
+//         */
+//        n = list_first_entry(&sd->poll_list, struct napi_struct, poll_list);
+//
+//        have = netpoll_poll_lock(n);
+//
+        weight = n->weight;
+
+        /* This NAPI_STATE_SCHED test is for avoiding a race
+         * with netpoll's poll_napi().  Only the entity which
+         * obtains the lock and sees NAPI_STATE_SCHED set will
+         * actually make the ->poll() call.  Therefore we avoid
+         * accidentally calling ->poll() when NAPI is not scheduled.
+         */
+        work = 0;
+        if (test_bit(NAPI_STATE_SCHED, &n->state)) {
+            work = n->poll(n, weight);
+            //trace_napi_poll(n);
+        }
+
+        WARN_ON_ONCE(work > weight);
+
+        budget -= work;
+
+        local_irq_disable();
+
+        /* Drivers must not modify the NAPI state if they
+         * consume the entire weight.  In such cases this code
+         * still "owns" the NAPI instance and therefore can
+         * move the instance around on the list at-will.
+         */
+        if (unlikely(work == weight)) {
+            if (unlikely(napi_disable_pending(n))) {
+                local_irq_enable();
+                napi_complete(n);
+                local_irq_disable();
+            } else {
+                if (n->gro_list) {
+                    /* flush too old packets
+                     * If HZ < 1000, flush all packets.
+                     */
+                    local_irq_enable();
+                    napi_gro_flush(n, HZ >= 1000);
+                    local_irq_disable();
+                }
+                //list_move_tail(&n->poll_list, &sd->poll_list);
+            }
+        }
+//
+//        netpoll_poll_unlock(have);
+//    }
+//out:
+//    net_rps_action_and_irq_enable(sd);
+//
+//#ifdef CONFIG_NET_DMA
+//    /*
+//     * There may not be any more sk_buffs coming right now, so push
+//     * any pending DMA copies to hardware
+//     */
+//    dma_issue_pending_all();
+//#endif
+//
+//    return;
+//
+//softnet_break:
+//    sd->time_squeeze++;
+//    __raise_softirq_irqoff(NET_RX_SOFTIRQ);
+//    goto out;
+}
+
+static struct sk_buff *__alloc_rx_skb(unsigned int length, gfp_t gfp_mask,
+        int flags)
+{
+    struct sk_buff *skb = NULL;
+    struct skb_shared_info *shinfo;
+    unsigned int size = length + sizeof(struct skb_shared_info);
+
+    skb = ucore_kmalloc(sizeof(struct sk_buff));
+    void *data = ucore_kmalloc(size);
+
+    memset(skb, 0, offsetof(struct sk_buff, tail));
+    /* Account for allocated memory : skb + skb->head */
+    skb->truesize = size;
+    skb->pfmemalloc = 0; // FIXME: what value?
+    skb->head = skb->data = data;
+    skb->tail = 0;
+    skb->end = size;
+    skb->mac_header = ~0U;
+    skb->transport_header = ~0U;
+
+    /* make sure we initialize shinfo sequentially */
+    shinfo = skb_shinfo(skb);
+    memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
+
+    return skb;
 }
 
 /*
  */
-DDE_WEAK void __napi_schedule(struct napi_struct * a) {
-	dde_printf("__napi_schedule not implemented\n");
-}
+struct sk_buff * __netdev_alloc_skb(struct net_device *dev,
+        unsigned int length, gfp_t gfp_mask) {
+    struct sk_buff *skb;
 
-/*
- */
-DDE_WEAK struct sk_buff * __netdev_alloc_skb(struct net_device * a, unsigned int b, gfp_t c) {
-	dde_printf("__netdev_alloc_skb not implemented\n");
-	return 0;
+    length += 64;
+    skb = __alloc_rx_skb(length, gfp_mask, 0);
+
+    if (likely(skb)) {
+        skb_reserve(skb, NET_SKB_PAD);
+        skb->dev = dev;
+    }
+
+    return skb;
 }
 
 /*
@@ -709,8 +888,26 @@ DDE_WEAK void netif_device_detach(struct net_device * a) {
 
 /*
  */
-DDE_WEAK void netif_napi_add(struct net_device * a, struct napi_struct * b, int (*c)(struct napi_struct *, int), int d) {
-	dde_printf("netif_napi_add not implemented\n");
+void netif_napi_add(struct net_device *dev, struct napi_struct *napi,
+        int (*poll)(struct napi_struct *, int), int weight)
+{
+    INIT_LIST_HEAD(&napi->poll_list);
+    napi->gro_count = 0;
+    napi->gro_list = NULL;
+    napi->skb = NULL;
+    napi->poll = poll;
+    #define NAPI_POLL_WEIGHT 64
+    if (weight > NAPI_POLL_WEIGHT)
+        kprintf("netif_napi_add() called with weight %d on device %s\n",
+                weight, dev->name);
+    napi->weight = weight;
+    list_add(&napi->dev_list, &dev->napi_list);
+    napi->dev = dev;
+#ifdef CONFIG_NETPOLL
+    spin_lock_init(&napi->poll_lock);
+    napi->poll_owner = -1;
+#endif
+    set_bit(NAPI_STATE_SCHED, &napi->state);
 }
 
 /*
@@ -952,6 +1149,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
                          const char *devname, void *dev_id) {
 	dde_printf("request_threaded_irq not implemented\n");
     kprintf("irq %d devname %s dev_id %x\n", irq, devname, dev_id);
+    ioapicenable(irq, 0);
     return 0;
 }
 
@@ -972,9 +1170,15 @@ DDE_WEAK int skb_pad(struct sk_buff * a, int b) {
 /*
  *	Add data to an sk_buff
  */
-DDE_WEAK unsigned char * skb_put(struct sk_buff * a, unsigned int b) {
-	dde_printf("skb_put not implemented\n");
-	return 0;
+unsigned char *skb_put(struct sk_buff *skb, unsigned int len)
+{
+        unsigned char *tmp = skb_tail_pointer(skb);
+        SKB_LINEAR_ASSERT(skb);
+        skb->tail += len;
+        skb->len  += len;
+        if (unlikely(skb->tail > skb->end))
+            kprintf("skb oversized!!!n");
+        return tmp;
 }
 
 /*

@@ -200,7 +200,8 @@ static void trap_dispatch(struct trapframe *tf)
         lapiceoi();
 		break;
     case IRQ_OFFSET + IRQ_E1000:
-        kprintf("irq for E1000!!\n");
+        e1000_intr_trap();
+        lapiceoi();
         break;
 	case IRQ_OFFSET + IRQ_IDE1:
 	case IRQ_OFFSET + IRQ_IDE2:
